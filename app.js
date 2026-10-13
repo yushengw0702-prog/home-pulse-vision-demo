@@ -60,11 +60,11 @@ const OBJECTS = [
 const objectForScene = id => OBJECTS.find(item=>item.scenes.includes(id)) || OBJECTS[0];
 const state = {
   page:'home', sceneId:'meal', objectTab:'buddy', phaseById:{meal:'normal',petdamage:'normal',parcel:'normal',basket:'normal',child:'normal',rain:'normal'}, created:new Set(['meal','petdamage','parcel','basket','child','rain']),
-  returnPage:'home', agentStep:0, agentBusy:null, agentPrompt:'', agentSource:'best',
+  returnPage:'home', agentStep:0, agentBusy:null, agentPrompt:'', agentSource:'best', agentAwaiting:false, agentChoice:null, agentAdjust:false, agentRunId:0,
   zoneEdit:false, zoneX:35, zoneY:27, agentSuggestion:false, modal:'', toast:'',
   notices:[], bannerNoticeId:null, activeNoticeId:null, noticeReturnPage:'notifications', savedMemories:new Set(), guardEnabled:false,
   navScroll:0, agentMode:'create', chatMessages:[], chatBusy:false,
-  focusPrefs:{}, manageSceneId:null, manageMessages:[], manageBusy:false,
+  focusPrefs:{}, focusZones:{}, manageSceneId:null, manageMessages:[], manageBusy:false, manageReturn:'detail',
 };
 const scene = () => SCENE_MAP[state.sceneId];
 const phase = (id=state.sceneId) => state.phaseById[id] || 'draft';
@@ -96,7 +96,7 @@ function appBar(){
 }
 function footer(){return `<nav class="phone-footer" aria-label="主导航"><button class="nav-button ${state.page==='home'?'active':''}" data-page="home">${icon('home')}<span>首页</span></button><button class="nav-button ${state.page==='attention'?'active':''}" data-page="attention">${icon('heart')}<span>关注</span></button><button class="nav-button ${state.page==='agent'?'active':''}" data-page="agent">${icon('chat')}<span>Agent</span></button><button class="nav-button ${state.page==='notifications'||state.page==='notice-detail'?'active':''}" data-page="notifications">${icon('bell')}<span>通知</span></button></nav>`;}
 function sidePanels(){
-  const links=[['home','01','家庭状态','一眼知道家里怎么样'],['attention','02','我的关注','10 个场景均可建立关注'],['agent','03','Home Pulse Agent','理解、选设备、确认区域'],['notifications','04','通知与处理','按状态分配注意力']].map(([key,no,title,sub])=>`<button class="stage-link ${state.page===key?'active':''}" data-page="${key}"><span class="num">${no}</span><span><strong>${title}</strong><small>${sub}</small></span>${icon('chevron')}</button>`).join('');
+  const links=[['home','01','家庭状态','一眼知道家里怎么样'],['attention','02','我的关注','10 个场景均可建立关注'],['agent','03','Home Pulse Agent','自动执行，仅在不确定时询问'],['notifications','04','通知与处理','按状态分配注意力']].map(([key,no,title,sub])=>`<button class="stage-link ${state.page===key?'active':''}" data-page="${key}"><span class="num">${no}</span><span><strong>${title}</strong><small>${sub}</small></span>${icon('chevron')}</button>`).join('');
   const s=scene(),p=phase();
   const options=SCENARIOS.map(x=>`<option value="${x.id}" ${x.id===s.id?'selected':''}>${x.no} · ${x.name}</option>`).join('');
   const controls=PHASES.slice(1).map(key=>`<button class="control-phase ${p===key?'active':''}" data-console-phase="${key}" ${!state.created.has(s.id)?'disabled':''}><span class="phase-light ${key}"></span>${PHASE_LABEL[key]}</button>`).join('');
@@ -139,33 +139,34 @@ function attentionPage(){
   return `<div class="page-heading"><div class="eyebrow">THINGS THAT MATTER</div><h1>每件关心，都有回应</h1><p>关注是有对象、有范围、有判断边界的持续任务。</p></div><div class="attention-summary glass-card"><div><strong>${active.length}</strong><span>持续关注</span></div><div><strong>${attentionCount()}</strong><span>需要留意</span></div><div><strong>${SCENARIOS.length}</strong><span>可创建场景</span></div></div><div class="section-heading"><div><h2>正在关注</h2><p>点开可查看状态依据</p></div></div>${active.map(s=>sceneCard(s)).join('')||'<div class="glass-card blank-card">还没有关注。选择下面的一件事开始。</div>'}<div class="section-heading"><div><h2>你还可以关注</h2><p>从真实生活中的一句话开始</p></div></div>${remaining.map(s=>`<button class="idea-card" data-create="${s.id}"><span class="mini-icon">${icon(s.icon)}</span><span><strong>${esc(s.name)}</strong><small>“${esc(s.prompt)}”</small></span>${icon('plus')}</button>`).join('')}`;
 }
 function agentRow(body){return `<div class="agent-row"><div class="agent-mini">✦</div><div class="glass-card agent-card">${body}</div></div>`;}
-function agentBusy(){
-  if (!state.agentBusy) return '';
-  const label={1:'正在理解对象、时间和你的关注目标',2:'正在核对哪些设备能覆盖目标',3:'正在检查当前画面与观察区域',4:'正在整理静默、提醒和未知规则',5:'正在保存关注并启动观察'}[state.agentBusy.next];
-  return `<div class="thinking-row"><span class="thinking-orb"><i></i></span><span><strong>${label}</strong><small>这可能需要几秒钟<span class="thinking-dots"><b></b><b></b><b></b></span></small></span></div>`;
-}
 function agentManagePage(){
   const s=SCENE_MAP[state.manageSceneId]||scene();
   const pref=state.focusPrefs[s.id]==='exception'?'仅异常提醒':'智能提醒';
   const messages=state.manageMessages.map(item=>`<div class="chat-message ${item.role}">${item.role==='assistant'?'<span class="chat-avatar">✦</span>':''}<div class="chat-bubble">${esc(item.text)}${item.done?`<button data-open-scene="${s.id}">返回关注详情 ${icon('chevron',14)}</button>`:''}</div></div>`).join('');
   return `<div class="manage-intro"><span class="agent-orb">✦</span><small>正在调整 · ${esc(s.object)}</small><h1>${esc(s.name)}</h1><p>告诉我你希望怎样被提醒，我会保留原有观察与判断边界。</p></div><div class="glass-card manage-current"><span>当前提醒方式</span><strong>${pref}</strong><small>${esc(s.schedule)} · ${esc(s.source)}</small></div><div class="chat-thread manage-thread"><div class="chat-message assistant"><span class="chat-avatar">✦</span><div class="chat-bubble">我会继续关注${esc(s.object)}。你想调整提醒方式吗？例如「只在异常时提醒我」。</div></div>${messages}${state.manageBusy?`<div class="chat-message assistant"><span class="chat-avatar">✦</span><div class="chat-bubble typing"><span class="thinking-orb"><i></i></span>正在核对提醒偏好与现有关注<span class="thinking-dots"><b></b><b></b><b></b></span></div></div>`:''}</div><div class="manage-quick"><button data-manage-choice="只在异常时提醒我">只在异常时提醒</button><button data-manage-choice="恢复智能提醒">恢复智能提醒</button></div><form class="agent-input chat-input" id="manage-form"><label class="sr-only" for="manage-prompt">调整这项关注</label><input id="manage-prompt" placeholder="说说你想怎样调整提醒…" autocomplete="off" ${state.manageBusy?'disabled':''}><button type="submit" aria-label="发送调整要求" ${state.manageBusy?'disabled':''}>${icon('send')}</button></form>`;
 }
+function agentProgress(){
+  const steps=['理解关注目标','匹配可用设备','确定观察区域','建立判断与提醒','启动持续关注'];
+  return `<section class="glass-card agent-progress" aria-label="创建关注进度"><div class="agent-progress-head"><span class="agent-progress-orb ${state.agentBusy?'spinning':''}">✦</span><span><strong>${state.agentStep===5?'关注已创建':state.agentAwaiting?'还需要你判断一件事':'正在创建关注事项'}</strong><small>${state.agentStep===5?'已开始持续观察，可随时调整':state.agentAwaiting?'其余步骤会自动继续':'我会自动完成能确定的步骤'}</small></span></div><div class="agent-progress-steps">${steps.map((label,index)=>{const n=index+1,done=state.agentStep>=n,working=state.agentBusy?.next===n;return `<div class="agent-progress-step ${done?'done':working?'working':state.agentAwaiting&&n===3?'waiting':''}"><span class="agent-step-mark">${done?icon('check',12):working?'<i class="agent-step-spinner"></i>':state.agentAwaiting&&n===3?'?':String(n).padStart(2,'0')}</span><span>${label}</span>${working?'<small>进行中</small>':state.agentAwaiting&&n===3?'<small>待你选择</small>':''}</div>`;}).join('')}</div></section>`;
+}
 function agentPage(){
   if(state.agentMode==='chat')return agentChatPage();
   if(state.agentMode==='manage')return agentManagePage();
-  const s=scene(); let flow='';
-  if (state.agentStep>0 || state.agentBusy) flow=`<div class="user-message">${esc(state.agentPrompt||s.prompt)}</div>`;
-  if (state.agentStep>=1) flow+=agentRow(`<h3>✦ 我理解你的需求</h3><p>${esc(s.understand)}</p><div class="info-panel"><div class="info-line">${icon(s.icon)}<span>关注对象</span><strong>${esc(s.object)}</strong></div><div class="info-line">${icon('clock')}<span>观察时机</span><strong>${esc(s.schedule)}</strong></div><div class="info-line">${icon('bell')}<span>触发信号</span><strong>${esc(s.trigger)}</strong></div></div>${state.agentStep===1&&!state.agentBusy?'<button class="primary-button full" data-action="agent-next">理解正确，继续 '+icon('chevron')+'</button>':'<span class="badge green">'+icon('check')+' 已确认需求</span>'}`);
-  if (state.agentStep>=2) {
-    const alt=s.source.includes('门口')?'客厅摄像头':'院子摄像头';
-    flow+=agentRow(`<h3>✦ 找到可观察区域</h3><p>${esc(s.ground)}</p><button class="source-choice ${state.agentSource==='best'?'selected':''}" data-source="best"><img src="${image(s.photo)}" alt="${esc(s.zone)}预览"><span><strong>${esc(s.source)} <span class="badge green">推荐</span></strong><small>${esc(s.zone)}</small></span><span class="radio"></span></button><button class="source-choice ${state.agentSource==='other'?'selected':''}" data-source="other"><span class="alternative-camera">${icon('camera')}</span><span><strong>${alt}</strong><small>不覆盖完整目标区域</small></span><span class="radio"></span></button>${state.agentSource==='other'?'<div class="agent-note">这个视角无法支持可靠判断，请选择覆盖目标的设备。</div>':''}${state.agentStep===2&&!state.agentBusy?`<button class="primary-button full" data-action="agent-next" ${state.agentSource==='other'?'disabled':''}>继续确认画面 ${icon('chevron')}</button>`:'<span class="badge green">'+icon('check')+' 已选择观察区域</span>'}`);
+  const s=scene(),plan=AGENT_PLANS[s.id],hasRun=state.agentStep>0||state.agentBusy||state.agentAwaiting;
+  let flow='';
+  if(hasRun){
+    flow+=`<div class="user-message">${esc(state.agentPrompt||s.prompt)}</div>${agentProgress()}`;
+    if(state.agentStep>=1)flow+=agentRow(`<h3>我会关注这件事</h3><div class="agent-result-main"><span class="mini-icon">${icon(s.icon,20)}</span><span><strong>${esc(s.name)}</strong><small>${esc(plan.goal)}</small></span></div><div class="agent-fact-line"><span>对象</span><strong>${esc(s.object)}</strong></div><div class="agent-fact-line"><span>时机</span><strong>${esc(s.schedule)}</strong></div>`);
+    if(state.agentStep>=2)flow+=agentRow(`<h3>找到相关观察区域</h3><div class="agent-found-media"><img src="${image(s.photo)}" alt="${esc(s.zone)}示意预览"><span><strong>${esc(s.source)}</strong><small>${esc(plan.found)}</small></span></div><p>${esc(plan.sourceWhy)}</p><small class="agent-demo-caption">示意图片用于说明观察位置，不代表真实设备识别结果</small>`);
+    if(state.agentAwaiting&&plan.ask)flow+=agentRow(`<h3>需要你决定</h3><p>${esc(plan.ask.title)}</p><div class="agent-ambiguity-preview"><img src="${image(s.photo)}" alt="${esc(s.object)}位置示意"><span class="agent-map-pin one">1</span><span class="agent-map-pin two">2</span><small>位置示意</small></div><div class="agent-choice-list">${plan.ask.choices.map((label,index)=>`<button data-agent-choice="${index}"><span>${String(index+1).padStart(2,'0')}</span><strong>${esc(label)}</strong>${icon('chevron',15)}</button>`).join('')}</div><div class="agent-note">${esc(plan.ask.body)}</div>`);
+    if(state.agentStep>=3)flow+=agentRow(`<h3>观察位置已确定</h3><div class="agent-fact-line"><span>位置</span><strong>${esc(state.agentChoice===null?s.zone:plan.ask.choices[state.agentChoice])}</strong></div><p>${esc(s.limit)}</p>`);
+    if(state.agentStep>=4)flow+=agentRow(`<h3>判断与提醒已安排</h3><div class="agent-rule-item"><span>判断</span><p>${esc(plan.decision)}</p></div><div class="agent-rule-item"><span>反馈</span><p>${esc(plan.notify)}</p></div><div class="agent-rule-item"><span>证据不足</span><p>${esc(s.unknownRoute)}</p></div>`);
+    if(state.agentStep>=5)flow+=agentRow(`<div class="agent-created-head"><span>${icon('check',20)}</span><div><small>已创建并开始守护</small><h3>${esc(s.name)}</h3></div></div><p>以后状态有变化，我会按这件事的注意力等级告诉你。</p><div class="agent-created-summary"><span>${icon('eye',15)} ${esc(state.agentChoice===null?s.zone:plan.ask.choices[state.agentChoice])}</span><span>${icon('bell',15)} ${esc(plan.notify)}</span></div><div class="button-row"><button class="primary-button" data-action="open-detail">查看关注详情</button><button class="secondary-button" data-action="agent-adjust">调整观察区域</button></div><button class="agent-manage-link" data-action="manage-focus">告诉我如何调整提醒 ${icon('chevron',14)}</button>`);
+    if(state.agentStep>=5&&state.agentAdjust)flow+=agentRow(`<h3>调整观察区域</h3><p>你可以主动改动观察框。画面为示意，正式接入后以授权设备为准。</p><div class="camera-frame region-frame ${state.zoneEdit?'editing':''}" data-action="position-zone"><img src="${image(s.photo)}" alt="${esc(s.zone)}示意画面"><span class="camera-label">${esc(s.source)} · 示意预览</span><span class="selection-box" style="--zone-x:${state.zoneX}%;--zone-y:${state.zoneY}%"><span>${esc(s.object)}</span></span></div><button class="secondary-button full" data-action="adjust-zone">${state.zoneEdit?'停止移动观察框':'点击后调整观察框'}</button><button class="primary-button full agent-save-zone" data-action="agent-save-adjust">保存调整</button>`);
+    if(state.agentBusy){const task=['理解关注目标','匹配可用设备','确定观察区域','建立判断与提醒','启动持续关注'][state.agentBusy.next-1];flow+=`<div class="thinking-row" role="status"><span class="thinking-orb"><i></i></span><span><strong>正在执行：${task}</strong><small>完成后会自动继续<span class="thinking-dots"><b></b><b></b><b></b></span></small></span></div>`;}
   }
-  if (state.agentStep>=3) flow+=agentRow(`<h3>✦ 请确认关注的位置</h3><div class="camera-frame region-frame ${state.zoneEdit?'editing':''}" data-action="position-zone"><img src="${image(s.photo)}" alt="${esc(s.zone)}区域预览"><span class="camera-label">${esc(s.source)} · 区域预览</span><span class="selection-box" style="--zone-x:${state.zoneX}%;--zone-y:${state.zoneY}%"><span>${esc(s.object)}</span></span></div><div class="agent-note">${esc(s.limit)}${state.zoneEdit?' 点击画面可移动蓝色关注框。':''}</div>${state.agentStep===3&&!state.agentBusy?`<div class="button-row"><button class="primary-button" data-action="agent-next">就是这里</button><button class="secondary-button" data-action="adjust-zone">${state.zoneEdit?'完成调整':'调整区域'}</button></div>`:'<span class="badge green">'+icon('check')+' 区域已确认</span>'}`);
-  if (state.agentStep>=4) flow+=agentRow(`<h3>✦ 关注规则</h3><p>${esc(s.rule)}</p><div class="rule-list"><div class="rule"><span class="badge green">正常</span><span>${esc(s.normalRoute)}</span></div><div class="rule"><span class="badge orange">关注</span><span>${esc(s.alertRoute)}</span></div><div class="rule"><span class="badge gray">未知</span><span>${esc(s.unknownRoute)}</span></div></div><div class="agent-note">能力边界：${esc(s.limit)}</div>${state.agentStep===4&&!state.agentBusy?`<button class="primary-button full" data-action="agent-create">创建这个关注 ${icon('chevron')}</button>`:''}`);
-  if (state.agentStep>=5) flow+=agentRow(`<h3>✦ 已开始关注 ${esc(s.object)}</h3><p>${esc(s.armed[1])}</p><span class="badge green">${icon('check')} 守护中</span><div class="button-row" style="margin-top:12px"><button class="primary-button" data-page="home">查看家庭状态</button><button class="secondary-button" data-page="attention">我的关注</button></div>`);
-  flow+=agentBusy();
   const ideas=SCENARIOS.map(x=>`<button data-create="${x.id}">${icon(x.icon)} ${esc(x.name)}</button>`).join('');
-  return `<div class="agent-intro"><div class="agent-orb">✦</div><h1>有什么想让我留意的？</h1><p>我会先确认看得见、判断得准，再开始守护。</p></div><div class="conversation">${flow}</div>${state.agentStep===0&&!state.agentBusy?`<form class="agent-input" id="agent-form"><label class="sr-only" for="agent-prompt">你想让我关注什么</label><input id="agent-prompt" value="${esc(state.agentPrompt)}" placeholder="例如：帮我留意门口的包裹…" autocomplete="off"><button type="submit" aria-label="发送">${icon('send')}</button></form><div class="suggestions">${ideas}</div>`:''}`;
+  return `<div class="agent-intro"><div class="agent-orb">✦</div><h1>${state.agentStep===5?'这件事已经安排好了':hasRun?'我正在把关心变成持续观察':'有什么想让我留意的？'}</h1><p>${state.agentStep===5?'现在开始持续观察，有变化会按约定告诉你。':hasRun?'确定的部分自动完成；需要你决定时才会询问。':'说出你在意的事，其余交给我来安排。'}</p></div><div class="conversation">${flow}</div>${!hasRun?`<form class="agent-input" id="agent-form"><label class="sr-only" for="agent-prompt">你想让我关注什么</label><input id="agent-prompt" value="${esc(state.agentPrompt)}" placeholder="例如：帮我留意门口的包裹…" autocomplete="off"><button type="submit" aria-label="发送">${icon('send')}</button></form><div class="suggestions">${ideas}</div>`:''}`;
 }
 function chatReply(question){
   const matched=matchScene(question);
@@ -198,7 +199,7 @@ function noticeDetailPage(){
   return `${head}<div class="glass-card notice-detail-section"><h2>现在的情况</h2><div class="routine-photo"><img src="${image(s.photo)}" alt="${esc(s.object)}区域预览"><span>${esc(s.zone)}</span></div><p>${esc(n.why)}</p></div><div class="glass-card notice-detail-section"><h2>建议行动</h2><p>${esc(n.action)}</p><div class="notice-action-row"><button class="primary-button" data-action="resolve-notice">${n.handled?'已确认':'确认已处理'}</button><button class="secondary-button" data-action="view-frame">查看画面</button></div></div>`;
 }
 function detailPage(){
-  const s=scene(),p=phase(),f=phaseInfo(),meta=FOCUS_DETAILS[s.id];
+  const s=scene(),p=phase(),f=phaseInfo(),meta=FOCUS_DETAILS[s.id],shownZone=state.focusZones[s.id]?.label||s.zone;
   const status=meta.status[p]||PHASE_LABEL[p];
   const recent=state.notices.filter(n=>n.sceneId===s.id).slice(-3).reverse();
   const lastPhase=p==='resolved'?recent.find(n=>n.phase==='attention'||n.phase==='unknown')?.phase||'normal':p;
@@ -209,7 +210,7 @@ function detailPage(){
   const marks=['normal','normal','normal','normal','unknown','normal',currentMark].map((mark,i)=>`<span class="focus-history-day ${mark}" aria-label="${i===6?'本次':`第 ${i+1} 次`}：${mark==='normal'?'正常':mark==='attention'?'需要关注':mark==='unknown'?'无法确认':'观察中'}"><span>${mark==='normal'?icon('check',13):mark==='attention'?icon('alert',13):mark==='unknown'?'?':'·'}</span><small>${i===6?'本次':String(i+1).padStart(2,'0')}</small></span>`).join('');
   const spec=noticeSpec(s.id,p);
   const route=spec?`L${spec.level} · ${ATTENTION_DELIVERY[spec.level]}`:'尚未触发提醒';
-  const preview=`<div class="focus-preview"><img src="${image(s.photo)}" alt="${esc(s.zone)}示意画面"><div><strong>${esc(s.zone)}</strong><small>公开图片仅用于演示界面，不是设备证据</small></div><button data-action="view-frame" aria-label="查看观察区域">${icon('chevron',17)}</button></div>`;
+  const preview=`<div class="focus-preview"><img src="${image(s.photo)}" alt="${esc(shownZone)}示意画面"><div><strong>${esc(shownZone)}</strong><small>公开图片仅用于演示界面，不是设备证据</small></div><button data-action="view-frame" aria-label="查看观察区域">${icon('chevron',17)}</button></div>`;
   const action=isPending(p)?`<section class="glass-card focus-section focus-next ${meta.kind}"><div class="focus-section-title"><span class="mini-icon orange">${icon('spark')}</span><h2>现在可以做什么</h2></div><p>${esc(p==='unknown'?'查看当前画面；若仍被遮挡，等待下一次复核。':s.action)}</p><div class="button-row"><button class="primary-button" data-action="view-frame">${icon('eye')} 查看画面</button><button class="secondary-button" data-action="resolve">确认并处理</button></div></section>`:'';
   const related=recent.length?recent.map(n=>{
     const media=n.type==='memory'?`<img class="focus-related-thumb" src="${image(s.photo)}" alt="Buddy 回忆预览">`:`<span class="focus-related-icon ${n.type}">${noticeIcon(n)}</span>`;
@@ -232,15 +233,14 @@ function render(opts={}){
 function navigate(page,opts={}){if(!opts.keepBanner){state.bannerNoticeId=null;clearTimeout(bannerTimer);}state.page=page;state.modal='';render({scroll:'top'});if(window.innerWidth<=760)window.scrollTo(0,0);}
 function flash(message){clearTimeout(toastTimer);state.toast=message;render();toastTimer=setTimeout(()=>{state.toast='';render();},2600);}
 function selectScene(id,show='home'){
-  if(!SCENE_MAP[id])return;clearTimeout(busyTimer);state.agentBusy=null;state.sceneId=id;state.objectTab=objectForScene(id).id;state.agentStep=0;state.agentPrompt='';state.agentSource='best';state.zoneEdit=false;navigate(show);
+  if(!SCENE_MAP[id])return;clearTimeout(busyTimer);state.agentRunId++;state.agentBusy=null;state.sceneId=id;state.objectTab=objectForScene(id).id;state.agentStep=0;state.agentPrompt='';state.agentSource='best';state.agentAwaiting=false;state.agentChoice=null;state.agentAdjust=false;state.zoneEdit=false;state.zoneX=35;state.zoneY=27;navigate(show);
 }
 function startAgent(id,prompt){
-  state.created.delete(id);delete state.phaseById[id];state.notices=state.notices.filter(n=>n.sceneId!==id);
   state.agentMode='create';selectScene(id,'agent');state.agentPrompt=prompt||SCENE_MAP[id].prompt;startBusy(1);
 }
-function openAgent(mode){clearTimeout(busyTimer);state.agentMode=mode;state.agentBusy=null;state.agentStep=0;state.agentPrompt='';navigate('agent');}
+function openAgent(mode){clearTimeout(busyTimer);state.agentRunId++;state.agentMode=mode;state.agentBusy=null;state.agentStep=0;state.agentAwaiting=false;state.agentChoice=null;state.agentAdjust=false;state.agentPrompt='';navigate('agent');}
 function openManage(){
-  state.manageSceneId=state.sceneId;state.manageMessages=[];state.manageBusy=false;state.agentMode='manage';navigate('agent');
+  state.manageReturn=state.page==='agent'?'agent':'detail';state.manageSceneId=state.sceneId;state.manageMessages=[];state.manageBusy=false;state.agentMode='manage';navigate('agent');
 }
 function submitManage(text){
   if(state.manageBusy)return;
@@ -264,12 +264,14 @@ function askChat(question){
   setTimeout(()=>{state.chatMessages.push({role:'assistant',...chatReply(question)});state.chatBusy=false;if(state.page==='agent'&&state.agentMode==='chat')render({scroll:'bottom'});},2100);
 }
 function startBusy(next){
-  clearTimeout(busyTimer);state.agentBusy={next};render({scroll:'bottom'});
-  const delay=next===1?2300:next===5?2400:1850+next*190;
+  clearTimeout(busyTimer);const runId=state.agentRunId,sceneId=state.sceneId;state.agentBusy={next};state.agentAwaiting=false;render({scroll:next===1?'top':'bottom'});
+  const delay=next===1?1800:next===2?1900:next===3?1700:next===4?2100:1600;
   busyTimer=setTimeout(()=>{
+    if(runId!==state.agentRunId||sceneId!==state.sceneId||state.agentMode!=='create')return;
     state.agentStep=next;state.agentBusy=null;
-    if(next===5){state.created.add(state.sceneId);state.phaseById[state.sceneId]='armed';}
-    render({scroll:'bottom'});
+    if(next===5){if(!state.created.has(sceneId)){state.created.add(sceneId);state.phaseById[sceneId]='armed';}state.focusZones[sceneId]={label:state.agentChoice===null?SCENE_MAP[sceneId].zone:AGENT_PLANS[sceneId].ask.choices[state.agentChoice],x:state.zoneX,y:state.zoneY};render({scroll:'bottom'});return;}
+    if(next===2&&AGENT_PLANS[sceneId].ask&&state.agentChoice===null){state.agentAwaiting=true;render({scroll:'bottom'});return;}
+    render({scroll:'bottom'});busyTimer=setTimeout(()=>{if(runId===state.agentRunId&&sceneId===state.sceneId&&state.agentMode==='create')startBusy(next+1);},450);
   },delay);
 }
 function recordNotice(spec){
@@ -315,23 +317,23 @@ document.addEventListener('click',event=>{
   const manageChoice=event.target.closest('[data-manage-choice]');if(manageChoice){submitManage(manageChoice.dataset.manageChoice);return;}
   const create=event.target.closest('[data-create]');if(create){startAgent(create.dataset.create);return;}
   const notice=event.target.closest('[data-notice]');if(notice){const n=state.notices.find(x=>x.id===notice.dataset.notice);if(n){state.noticeReturnPage=state.page;state.activeNoticeId=n.id;state.sceneId=n.sceneId;state.bannerNoticeId=null;clearTimeout(bannerTimer);navigate('notice-detail');}return;}
-  const source=event.target.closest('[data-source]');if(source){state.agentSource=source.dataset.source;render();return;}
+  const choice=event.target.closest('[data-agent-choice]');if(choice){const index=Number(choice.dataset.agentChoice),ask=AGENT_PLANS[state.sceneId]?.ask;if(state.agentAwaiting&&Number.isInteger(index)&&ask?.choices[index]){state.agentChoice=index;startBusy(3);}return;}
   const page=event.target.closest('[data-page]');if(page){if(page.dataset.page==='agent')state.agentMode='create';navigate(page.dataset.page);return;}
   const action=event.target.closest('[data-action]');if(!action)return;event.preventDefault();
   switch(action.dataset.action){
-    case 'back':navigate(state.page==='detail'?state.returnPage:state.page==='notice-detail'?state.noticeReturnPage:state.page==='agent'&&state.agentMode==='manage'?'detail':'home');break;
+    case 'back':if(state.page==='agent'&&state.agentMode==='manage'&&state.manageReturn==='agent'){state.agentMode='create';navigate('agent');}else navigate(state.page==='detail'?state.returnPage:state.page==='notice-detail'?state.noticeReturnPage:state.page==='agent'&&state.agentMode==='manage'?'detail':'home');break;
     case 'dismiss-banner':state.bannerNoticeId=null;clearTimeout(bannerTimer);render();break;
     case 'open-agent-create':openAgent('create');break;
     case 'open-agent-chat':openAgent('chat');break;
     case 'manage-focus':openManage();break;
-    case 'console-create':startAgent(state.sceneId);break;
+    case 'console-create':state.created.delete(state.sceneId);delete state.phaseById[state.sceneId];delete state.focusZones[state.sceneId];state.notices=state.notices.filter(n=>n.sceneId!==state.sceneId);startAgent(state.sceneId);break;
     case 'console-seed':state.created.add(state.sceneId);state.phaseById[state.sceneId]='armed';navigate('home');break;
     case 'console-home':navigate('home');break;
-    case 'console-reset':state.created.delete(state.sceneId);delete state.phaseById[state.sceneId];state.notices=state.notices.filter(n=>n.sceneId!==state.sceneId);navigate('home');break;
+    case 'console-reset':state.created.delete(state.sceneId);delete state.phaseById[state.sceneId];delete state.focusZones[state.sceneId];state.notices=state.notices.filter(n=>n.sceneId!==state.sceneId);navigate('home');break;
     case 'create-current':startAgent(state.sceneId);break;
     case 'open-detail':state.returnPage=state.page;navigate('detail');break;
-    case 'agent-next':if(state.agentSource==='other')break;startBusy(Math.min(4,state.agentStep+1));break;
-    case 'agent-create':startBusy(5);break;
+    case 'agent-adjust':state.agentAdjust=!state.agentAdjust;state.zoneEdit=false;render({scroll:'bottom'});break;
+    case 'agent-save-adjust':state.focusZones[state.sceneId]={label:state.focusZones[state.sceneId]?.label||scene().zone,x:state.zoneX,y:state.zoneY};state.agentAdjust=false;state.zoneEdit=false;flash('观察区域已更新');break;
     case 'adjust-zone':state.zoneEdit=!state.zoneEdit;render();break;
     case 'position-zone':if(state.zoneEdit){const rect=action.getBoundingClientRect();state.zoneX=Math.max(4,Math.min(58,(event.clientX-rect.left)/rect.width*100-17));state.zoneY=Math.max(10,Math.min(60,(event.clientY-rect.top)/rect.height*100-18));render();}break;
     case 'view-frame':state.modal='frame';render();break;
