@@ -1,5 +1,7 @@
 # Home Pulse · 十场景产品链路 Demo
 
+[在线体验 Home Pulse Demo](https://yushengw0702-prog.github.io/home-pulse-vision-demo/)
+
 独立静态工程。原生 HTML、CSS、JavaScript，无需安装依赖。App 画面固定为 430 × 932 逻辑像素（6.7 英寸手机原型比例），不随浏览器窗口缩放；窄于画面的窗口可横向滚动。手机画框内是用户 App；场景和时间推进只在画框外的操作台进行。
 
 ## 打开
