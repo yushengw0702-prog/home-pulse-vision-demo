@@ -115,25 +115,34 @@ function sceneCard(s, opts={}){
   const p=phase(s.id), f=phaseInfo(s,p), selected=state.sceneId===s.id;
   return `<button class="story-card glass-card ${selected?'selected':''}" data-open-scene="${s.id}"><span class="story-image"><img src="${image(s.photo)}" alt="${esc(s.object)}区域预览"><span class="story-icon">${icon(s.icon)}</span></span><span class="story-copy"><small>${s.no} · ${esc(s.group)}</small><strong>${esc(s.name)}</strong><em>${esc(f[0])}</em></span><span class="story-state ${p}">${esc(phaseLabel(s.id,p))}</span></button>`;
 }
+const HOME_CARD_TITLES={parcel:'包裹状态',away:'门窗状态',petdamage:'客厅活动',child:'放学到家',meal:'饮食状态',cleaning:'保洁状态',briefcase:'公文包',rain:'雨天阳台',basket:'零食篮位置',turtle:'乌龟越线',moments:'精彩瞬间'};
+const HOME_CARD_ICONS={petdamage:'activity',meal:'food',moments:'spark'};
+function homeCard(s){
+  const p=phase(s.id),f=phaseInfo(s,p),task=FOCUS_DETAILS[s.id],isDiscovery=task.watchType==='discovery';
+  const status=isDiscovery?(p==='normal'?'3 个发现':p==='attention'?'特别发现':phaseLabel(s.id,p)):(task.status[p]||phaseLabel(s.id,p));
+  const critical=p==='attention'&&noticeSpec(s.id,p)?.type==='alert';
+  const tone=isDiscovery?'discovery':critical?'critical':p;
+  const visual=isDiscovery?`<span class="home-card-thumbnails" aria-hidden="true">${task.discoveries.slice(0,3).map(item=>`<img src="${image(item.photo)}" alt="">`).join('')}</span>`:`<span class="home-card-bars" aria-hidden="true">${[36,56,43,76,60,92,68].map((height,i)=>`<i style="--bar-height:${height}%;--bar-delay:${i*28}ms"></i>`).join('')}</span>`;
+  return `<button class="concern-card ${tone}" data-open-scene="${s.id}" aria-label="${esc(s.name)}，${esc(status)}，查看关注详情"><span class="home-card-top"><span class="concern-icon">${icon(HOME_CARD_ICONS[s.id]||s.icon,24)}</span><span class="home-card-chevron">${icon('chevron',15)}</span></span><span class="home-card-name">${esc(HOME_CARD_TITLES[s.id]||s.name)}</span><strong class="home-card-status">${esc(status)}</strong><span class="home-card-note">${esc(f[1])}</span><span class="home-card-foot"><small>${esc(f[2])}</small>${visual}</span></button>`;
+}
 function homePage(){
   const pending=attentionCount();
   const mood=homeMood();
   const title=mood==='security'?'家里有安全事项需要处理':mood==='care'?`${pending} 项状态需要你关注`:mood==='unknown'?`${pending} 项状态还无法确认`:'今天家里很安心';
   const summary=mood==='normal'?'你关注的人与事都在各自的节奏里。':`${pending} 项关注出现变化，点开对应事项查看依据。`;
-  const current=OBJECTS.find(item=>item.id===state.objectTab)||OBJECTS[0];
-  const active=current.scenes.map(id=>SCENE_MAP[id]).filter(s=>s&&state.created.has(s.id));
-  const remaining=current.scenes.map(id=>SCENE_MAP[id]).filter(s=>s&&!state.created.has(s.id));
+  const stable=SCENARIOS.filter(s=>state.created.has(s.id)&&['normal','resolved'].includes(phase(s.id))).length;
   const tabs=OBJECTS.map(item=>{
     const count=item.scenes.filter(id=>state.created.has(id)).length;
     const alert=item.scenes.some(id=>isPending(phase(id),id));
-    return `<button class="object-tab ${item.id===current.id?'active':''}" data-object-tab="${item.id}" aria-pressed="${item.id===current.id}"><span class="object-tab-icon">${icon(item.icon,17)}${alert?'<i class="object-alert"></i>':''}</span><span>${esc(item.name)}</span>${count?`<small>${count}</small>`:''}</button>`;
+    return `<button class="object-tab ${item.id===state.objectTab?'active':''}" data-object-tab="${item.id}" aria-pressed="${item.id===state.objectTab}"><span class="object-tab-icon">${icon(item.icon,17)}${alert?'<i class="object-alert"></i>':''}</span><span>${esc(item.name)}</span>${count?`<small>${count}</small>`:''}</button>`;
   }).join('');
-  const cards=active.map(s=>{
-    const p=phase(s.id),f=phaseInfo(s,p);
-    return `<button class="concern-card glass-card ${p} ${s.id==='moments'?'discovery':''}" data-open-scene="${s.id}"><span class="concern-icon ${badgeClass(p,s.id)}">${icon(s.icon,20)}</span><span class="concern-copy"><span class="concern-top"><strong>${esc(s.name)}</strong><em class="badge ${badgeClass(p,s.id)}">${esc(phaseLabel(s.id,p))}</em></span><span class="concern-status">${esc(f[0])}</span><span class="concern-meta">${esc(f[2])}</span></span><span class="concern-arrow">${icon('chevron',16)}</span></button>`;
+  const groups=OBJECTS.map(item=>{
+    const active=item.scenes.map(id=>SCENE_MAP[id]).filter(s=>s&&state.created.has(s.id));
+    const remaining=item.scenes.map(id=>SCENE_MAP[id]).filter(s=>s&&!state.created.has(s.id));
+    const ideas=remaining.map(s=>`<button class="home-create-card" data-create="${s.id}"><span>${icon('plus',22)}</span><strong>${esc(HOME_CARD_TITLES[s.id]||s.name)}</strong><small>创建新关注</small></button>`).join('');
+    return `<section class="home-object-group" id="home-object-${item.id}" data-home-object="${item.id}"><div class="object-section-head"><img src="${image(item.photo)}" alt=""><span><strong>${esc(item.name)}</strong><small>${esc(item.kind)} · ${active.length} 项关注</small></span><em>${active.length?`${active.length} 项`:'待关注'}</em></div><div class="concern-list">${active.map(homeCard).join('')}${ideas}</div></section>`;
   }).join('');
-  const ideas=remaining.map(s=>`<button class="concern-create" data-create="${s.id}">${icon('plus',16)} 新建「${esc(s.name)}」</button>`).join('');
-  return `<section class="hero home-hero"><div class="mascot-space">${mascot()}</div><h1>${title}</h1><p>${esc(summary)}</p><button class="attention-pill ${mood}" data-page="attention">${icon(pending?'alert':'checkCircle')} ${pending?`${pending} 项需要留意`:`${activeCount()} 项关注守护中`} ${icon('chevron')}</button></section><div class="section-heading object-heading"><div><h2>关注对象</h2><p>选择一个对象，快速查看它的每件事</p></div></div><div class="object-tabs" aria-label="关注对象">${tabs}</div><div class="object-section-head"><img src="${image(current.photo)}" alt=""><span><strong>${esc(current.name)}</strong><small>${esc(current.kind)} · ${active.length} 项持续关注</small></span></div><div class="concern-list">${cards||'<div class="glass-card empty-object">这里还没有关注事项。点按下方新建，让 Home Pulse 先理解你在意什么。</div>'}${ideas}</div><div class="home-section-end">每件关注都有自己的判断依据与提醒方式</div>`;
+  return `<div class="home-dashboard"><section class="hero home-hero"><div class="home-hero-eyebrow">HOME PULSE · 今日家庭状态</div><div class="mascot-space">${mascot()}</div><h1>${title}</h1><p>${esc(summary)}</p><div class="home-status-strip"><span><b>${stable}</b> 项状态稳定</span><i></i><span class="${pending?'has-attention':''}"><b>${pending}</b> 项需要留意</span></div><button class="attention-pill ${mood}" data-page="attention">查看全部关注 ${icon('chevron',14)}</button></section><div class="section-heading object-heading"><div><h2>我的关注</h2><p>选择对象，快速找到每一件关心的事</p></div></div><div class="object-tabs" aria-label="关注对象">${tabs}</div><div class="home-groups">${groups}</div></div>`;
 }
 function attentionPage(){
   const active=SCENARIOS.filter(s=>state.created.has(s.id));
@@ -225,13 +234,19 @@ function bannerHtml(){
 function render(opts={}){
   const root=document.getElementById('app');const old=document.getElementById('phone-scroll')?.scrollTop||0;
   const pages={home:homePage,attention:attentionPage,agent:agentPage,notifications:noticesPage,detail:detailPage,'notice-detail':noticeDetailPage};
-  root.innerHTML=`<main class="workspace">${sidePanels()}<div class="phone-wrap"><div class="phone">${statusBar()}${appBar()}<div class="content-scroll" id="phone-scroll">${pages[state.page]()}</div>${state.page==='home'?`<div class="home-float-actions"><button class="float-action" data-action="open-agent-create" aria-label="创建新关注" title="创建新关注">${icon('plus',25)}</button><button class="float-action" data-action="open-agent-chat" aria-label="与 Home Pulse 对话" title="与 Home Pulse 对话">${icon('chat',23)}</button></div>`:''}${footer()}<div class="home-indicator"></div>${state.toast?`<div class="toast">${icon('checkCircle')} ${esc(state.toast)}</div>`:''}${bannerHtml()}${modalHtml()}</div></div></main>`;
+  root.innerHTML=`<main class="workspace">${sidePanels()}<div class="phone-wrap"><div class="phone ${state.page==='home'?'home-screen':''}">${statusBar()}${appBar()}<div class="content-scroll" id="phone-scroll">${pages[state.page]()}</div>${state.page==='home'?`<div class="home-float-actions"><button class="float-action" data-action="open-agent-create" aria-label="创建新关注" title="创建新关注">${icon('plus',25)}</button><button class="float-action" data-action="open-agent-chat" aria-label="与 Home Pulse 对话" title="与 Home Pulse 对话">${icon('chat',23)}</button></div>`:''}${footer()}<div class="home-indicator"></div>${state.toast?`<div class="toast">${icon('checkCircle')} ${esc(state.toast)}</div>`:''}${bannerHtml()}${modalHtml()}</div></div></main>`;
   const sc=document.getElementById('phone-scroll');sc.scrollTop=opts.scroll==='top'?0:opts.scroll==='bottom'?sc.scrollHeight:old;
 }
 function navigate(page,opts={}){if(!opts.keepBanner){state.bannerNoticeId=null;clearTimeout(bannerTimer);}state.page=page;state.modal='';render({scroll:'top'});if(window.innerWidth<=760)window.scrollTo(0,0);}
+function scrollHomeObject(id,smooth=true){
+  const sc=document.getElementById('phone-scroll'),target=document.getElementById(`home-object-${id}`);
+  if(!sc||!target||state.page!=='home')return;
+  const top=target.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop-72;
+  sc.scrollTo({top:Math.max(0,top),behavior:smooth?'smooth':'auto'});
+}
 function flash(message){clearTimeout(toastTimer);state.toast=message;render();toastTimer=setTimeout(()=>{state.toast='';render();},2600);}
 function selectScene(id,show='home'){
-  if(!SCENE_MAP[id])return;clearTimeout(busyTimer);state.agentRunId++;state.agentBusy=null;state.sceneId=id;state.objectTab=objectForScene(id).id;state.agentStep=0;state.agentPrompt='';state.agentSource='best';state.agentAwaiting=false;state.agentChoice=null;state.agentCustomArea=false;state.agentAreaMarked=false;state.agentAdjust=false;state.zoneEdit=false;state.zoneX=35;state.zoneY=27;navigate(show);
+  if(!SCENE_MAP[id])return;clearTimeout(busyTimer);state.agentRunId++;state.agentBusy=null;state.sceneId=id;state.objectTab=objectForScene(id).id;state.agentStep=0;state.agentPrompt='';state.agentSource='best';state.agentAwaiting=false;state.agentChoice=null;state.agentCustomArea=false;state.agentAreaMarked=false;state.agentAdjust=false;state.zoneEdit=false;state.zoneX=35;state.zoneY=27;navigate(show);if(show==='home')scrollHomeObject(state.objectTab,false);
 }
 function startAgent(id,prompt){
   state.agentMode='create';selectScene(id,'agent');state.agentPrompt=prompt||SCENE_MAP[id].prompt;startBusy(1);
@@ -291,13 +306,13 @@ function advancePhase(p){
   if(p==='normal'||p==='resolved')state.notices.filter(n=>n.sceneId===s.id).forEach(n=>n.handled=true);
   state.bannerNoticeId=null;clearTimeout(bannerTimer);
   recordNotice(noticeSpec(s.id,p));
-  navigate('home',{keepBanner:true});
+  navigate('home',{keepBanner:true});scrollHomeObject(state.objectTab,false);
 }
 function triggerShowcase(type){
   if(type==='memory'){
     state.created.add(MEMORY_DIGEST.sceneId);state.phaseById[MEMORY_DIGEST.sceneId]='normal';
     state.sceneId=MEMORY_DIGEST.sceneId;state.objectTab=objectForScene(state.sceneId).id;
-    recordNotice(MEMORY_DIGEST);navigate('home',{keepBanner:true});return;
+    recordNotice(MEMORY_DIGEST);navigate('home',{keepBanner:true});scrollHomeObject(state.objectTab,false);return;
   }
   const item=NOTICE_SHOWCASES.find(x=>x.type===type);if(!item)return;
   state.sceneId=item.sceneId;state.objectTab=objectForScene(item.sceneId).id;
@@ -322,7 +337,7 @@ document.addEventListener('click',event=>{
   const showcase=event.target.closest('[data-console-showcase]');if(showcase){triggerShowcase(showcase.dataset.consoleShowcase);return;}
   const phaseControl=event.target.closest('[data-console-phase]');if(phaseControl){advancePhase(phaseControl.dataset.consolePhase);return;}
   const banner=event.target.closest('[data-banner-open]');if(banner){const n=state.notices.find(x=>x.id===banner.dataset.bannerOpen);if(n){state.noticeReturnPage=state.page;state.activeNoticeId=n.id;state.sceneId=n.sceneId;state.bannerNoticeId=null;clearTimeout(bannerTimer);navigate('notice-detail');}return;}
-  const objectTab=event.target.closest('[data-object-tab]');if(objectTab){const object=OBJECTS.find(x=>x.id===objectTab.dataset.objectTab);if(object){state.objectTab=object.id;state.sceneId=object.scenes.find(id=>state.created.has(id))||object.scenes[0];render();}return;}
+  const objectTab=event.target.closest('[data-object-tab]');if(objectTab){const object=OBJECTS.find(x=>x.id===objectTab.dataset.objectTab);if(object){state.objectTab=object.id;state.sceneId=object.scenes.find(id=>state.created.has(id))||object.scenes[0];document.querySelectorAll('.object-tab').forEach(tab=>{const selected=tab.dataset.objectTab===object.id;tab.classList.toggle('active',selected);tab.setAttribute('aria-pressed',String(selected));});scrollHomeObject(object.id);}return;}
   const item=event.target.closest('[data-open-scene]');if(item){state.sceneId=item.dataset.openScene;state.returnPage=state.page;navigate('detail');return;}
   const chatDetail=event.target.closest('[data-chat-detail]');if(chatDetail){state.sceneId=chatDetail.dataset.chatDetail;state.returnPage='agent';navigate('detail');return;}
   const chatSuggest=event.target.closest('[data-chat-suggest]');if(chatSuggest){askChat(chatSuggest.dataset.chatSuggest);return;}
@@ -342,7 +357,7 @@ document.addEventListener('click',event=>{
     case 'agent-mark-area':if(state.agentAwaiting&&state.agentCustomArea&&state.agentAreaMarked)startBusy(4);break;
     case 'agent-confirm':if(state.agentStep===7&&!state.agentBusy){const id=state.sceneId;if(!state.created.has(id)){state.created.add(id);state.phaseById[id]='armed';}state.focusZones[id]={label:agentAreaLabel(scene(),AGENT_PLANS[id]),x:state.zoneX,y:state.zoneY};state.agentStep=8;render({scroll:'bottom'});}break;
     case 'console-create':state.created.delete(state.sceneId);delete state.phaseById[state.sceneId];delete state.focusZones[state.sceneId];state.notices=state.notices.filter(n=>n.sceneId!==state.sceneId);startAgent(state.sceneId);break;
-    case 'console-seed':state.created.add(state.sceneId);state.phaseById[state.sceneId]='armed';navigate('home');break;
+    case 'console-seed':state.created.add(state.sceneId);state.phaseById[state.sceneId]='armed';navigate('home');scrollHomeObject(state.objectTab,false);break;
     case 'console-home':navigate('home');break;
     case 'console-reset':state.created.delete(state.sceneId);delete state.phaseById[state.sceneId];delete state.focusZones[state.sceneId];state.notices=state.notices.filter(n=>n.sceneId!==state.sceneId);navigate('home');break;
     case 'create-current':startAgent(state.sceneId);break;
