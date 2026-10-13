@@ -1,0 +1,63 @@
+# Home Pulse · 十场景产品链路 Demo
+
+独立静态工程。原生 HTML、CSS、JavaScript，无需安装依赖。App 画面固定为 430 × 932 逻辑像素（6.7 英寸手机原型比例），不随浏览器窗口缩放；窄于画面的窗口可横向滚动。手机画框内是用户 App；场景和时间推进只在画框外的操作台进行。
+
+## 打开
+
+直接打开 `index.html`，或在本目录运行：
+
+```sh
+python3 -m http.server 4175
+```
+
+浏览器访问 `http://127.0.0.1:4175/`。
+
+## 演示方法
+
+1. 在右侧（窄屏时在手机画框下方）操作台选择需求。
+2. 点「走完整创建链路」，体验 Agent 理解需求、匹配设备、确认观察区域、审阅提醒规则。Agent 每步都有等待和分析动画；观察区域可点击调整。
+3. 创建后，在操作台按「守护中 → 核对中 → 已确认 / 需要关注 / 无法确认」推进。也可用「直接载入已创建」快速查看某一状态。
+4. 查看 App 首页、通知、事件详情。需要关注或无法确认时，可在详情中标记已处理；再次打开通知会显示已处理状态。
+
+首页按关注对象快速定位。每个对象下的关注事项是独立小卡片，例如 Buddy 的午餐与客厅活动、门口的包裹与零食篮。右下角玻璃悬浮加号进入 Agent 新建关注流程；对话图标进入家庭状态问答，可按当前关注状态解释并跳转到依据详情。
+
+手机 App 内没有任何场景切换或模拟状态按钮。正式状态由设备事件、时间窗或外部信号驱动；操作台仅服务方案展示。
+
+## 10 个需求
+
+| 编号 | 关注 | 特别展示 |
+| --- | --- | --- |
+| 1.1 | 门口包裹守护 | 仍在时静默，移走时高优先提醒 |
+| 1.2 | 离家门窗确认 | 多模态状态断言，不让用户逐段看录像 |
+| 1.3 | Buddy 客厅活动 | 普通活动静默，持续破坏才提醒 |
+| 1.4 | 孩子放学到家 | 时间窗与身份核对，确认后报平安 |
+| 2.1 | Buddy 午餐观察 | 饭点内事件唤醒，超时温和提醒 |
+| 2.2 | 保洁工作完成 | 工作时静默，离开并静置后总结 |
+| 2.3 | 出门公文包提醒 | 开门 Hook 唤醒快照，不全天录像 |
+| 2.4 | 雨天阳台检查 | 天气信号与可视证据联动 |
+| 2.5 | 零食篮位置关注 | 非标准目标遮挡时输出 Unknown |
+| 2.6 | 鱼缸乌龟越线 | 小目标降级为低频轮询与越线判断 |
+
+每个需求都具有：创建关注 → 守护中 → 事件核对 → 正常 / 关注 / 未知 → 适当触达 → 详情解释 → 用户处理的完整路径。具体文案、证据边界和提醒方式配置在 `scenario-data.js`。
+
+## 原型边界
+
+- 尚未连接官方 SDK、真实摄像头、天气 API、系统推送或 AI 服务。事件和状态由操作台推进，Agent 的等待动画模拟系统处理节奏。
+- 公开图片只用于界面构图，不代表任何真实设备证据。真实接入时需用授权画面与设备事件替换。
+- `buddy-feeding.jpg` 来自 PawPick 网站，仅供本地方案演示；公开发布前请换成团队自有或明确获许可的素材。
+
+## 图片来源与授权
+
+| 文件 | 来源 | 授权 |
+| --- | --- | --- |
+| `package-door.jpg` | [Meanwell Packaging / Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Fragile_Parcel_left_outside_door.jpg) | CC BY 2.0 |
+| `front-door-day.jpg` | [Wilfredor / Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Black_door_of_a_white_clapboard_house_in_Quebec_City.jpg) | CC0 |
+| `dog-sofa.jpg` | [Obamabbba / Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Dog_Couch.jpg) | CC BY-SA 4.0 |
+| `briefcase.jpg` | [Nikowsk / Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Briefcase_and_phone.jpg) | CC BY-SA 4.0 |
+| `rain-window.jpg` | [W.carter / Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Rain_on_a_window.jpg) | CC BY-SA 4.0 |
+| `basket.jpg` | [Bonnie Kittle / Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Picnic_basket_(Unsplash).jpg) | CC0 |
+| `turtle.jpg` | [Awewewe / Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Trachemys_scripta_elegans_v_akvariu.jpg) | CC BY-SA 4.0 |
+| `living-room.jpg` | [Unsplash 图片](https://images.unsplash.com/photo-1600210492486-724fe5c67fb0) | [Unsplash License](https://unsplash.com/license) |
+| `buddy-feeding.jpg` | [PawPick NZ](https://pawpick.co.nz/guides/best-grain-free-dog-food-nz/) | 仅供本地方案演示 |
+
+发布或改编 CC BY / BY-SA 素材时，请保留作者、来源、许可证及改动说明。此工程保存了适合界面预览的尺寸，没有编辑照片内容。
