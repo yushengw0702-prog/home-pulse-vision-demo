@@ -2,7 +2,7 @@
 // These are demo fixtures, never live camera findings or real household history.
 const FOCUS_DETAILS = {
   parcel: {
-    title:'门口包裹状态',kind:'security',status:{normal:'仍在门口',attention:'位置异常',unknown:'暂无法确认'},
+    title:'门口包裹状态',kind:'security',watchType:'state',status:{normal:'仍在门口',attention:'位置异常',unknown:'暂无法确认'},
     trend:{window:'近 7 次包裹观察',label:'通常领取用时',value:'约 2 小时',note:'普通路过不计为包裹变化'},
     timeline:{
       normal:[['12:20','快递放置在门口，建立位置基线'],['12:24','门口有人员经过，触发位置复核'],['12:25','包裹仍在原位置']],
@@ -11,7 +11,7 @@ const FOCUS_DETAILS = {
     },
   },
   away: {
-    title:'离家门窗确认',kind:'routine',status:{normal:'门窗已关',attention:'一扇窗未关',unknown:'仍待核对'},
+    title:'离家门窗确认',kind:'routine',watchType:'state',status:{normal:'门窗已关',attention:'一扇窗未关',unknown:'仍待核对'},
     trend:{window:'近 7 次离家',label:'通常确认结果',value:'全部闭合',note:'每次离家才启动一次核对'},
     timeline:{
       normal:[['08:31','离家事件触发，大门门磁闭合'],['08:31','检查客厅与阳台窗可见区域'],['08:32','门窗均可确认关闭']],
@@ -20,8 +20,10 @@ const FOCUS_DETAILS = {
     },
   },
   petdamage: {
-    title:'Buddy 客厅活动',kind:'care',status:{normal:'活动正常',attention:'行为需关注',unknown:'暂无法确认'},
+    title:'Buddy 客厅活动',kind:'care',watchType:'risk',status:{normal:'活动正常',attention:'行为需关注',unknown:'暂无法确认'},
     trend:{window:'过去 7 天',label:'日常状态',value:'以休息为主',note:'普通活动留在记录，持续破坏才提醒'},
+    riskHistory:{window:'最近 30 天',quiet:'29 天',events:'1 次',note:'模拟历史：普通靠近与休息没有算作风险事件'},
+    riskStages:['Buddy 靠近沙发区域','连续画面核对是否咬扯','持续破坏行为才需要提醒'],
     timeline:{
       normal:[['10:12','Buddy 靠近客厅沙发'],['10:13','连续画面显示休息，没有撕咬'],['10:13','普通活动已记录，手机保持安静']],
       attention:[['10:12','Buddy 进入沙发区域'],['10:13','连续画面显示咬扯沙发边缘'],['10:13','持续行为达到提醒条件']],
@@ -29,7 +31,7 @@ const FOCUS_DETAILS = {
     },
   },
   child: {
-    title:'孩子放学到家',kind:'care',status:{normal:'已安全到家',attention:'尚未到家',unknown:'身份待确认'},
+    title:'孩子放学到家',kind:'care',watchType:'state',status:{normal:'已安全到家',attention:'尚未到家',unknown:'身份待确认'},
     trend:{window:'最近 7 个放学日',label:'约定时间窗',value:'15:00–18:00',note:'只有身份与入户状态同时确认才报平安'},
     timeline:{
       normal:[['15:30','门磁与入户画面同时触发'],['15:30','确认进入的是孩子'],['15:31','关门后生成到家确认']],
@@ -38,7 +40,7 @@ const FOCUS_DETAILS = {
     },
   },
   meal: {
-    title:'Buddy 饮食状态',kind:'care',status:{normal:'午餐已完成',attention:'午餐未确认',unknown:'暂无法确认'},
+    title:'Buddy 饮食状态',kind:'care',watchType:'state',status:{normal:'午餐已完成',attention:'午餐未确认',unknown:'暂无法确认'},
     trend:{window:'过去 7 天',label:'通常进食时间',value:'12:30 左右',note:'以连续进食行为作为完成依据'},
     timeline:{
       normal:[['12:00','午餐观察时间窗开始'],['12:18','Buddy 靠近饭盆，连续画面显示进食'],['12:18','确认午餐完成，静默更新状态']],
@@ -47,7 +49,7 @@ const FOCUS_DETAILS = {
     },
   },
   cleaning: {
-    title:'保洁工作状态',kind:'routine',status:{normal:'已完成',attention:'一处待查看',unknown:'部分确认'},
+    title:'保洁工作状态',kind:'routine',watchType:'state',status:{normal:'已完成',attention:'一处待查看',unknown:'部分确认'},
     trend:{window:'近 7 次保洁',label:'总结时机',value:'离开后 10 分钟',note:'工作期间不发送零散活动通知'},
     timeline:{
       normal:[['09:00','记录客厅与厨房清晨基线'],['12:05','确认人员离开'],['12:15','静置后可见区域恢复整洁']],
@@ -56,7 +58,7 @@ const FOCUS_DETAILS = {
     },
   },
   briefcase: {
-    title:'出门公文包',kind:'routine',status:{normal:'已带走',attention:'可能遗忘',unknown:'位置待确认'},
+    title:'出门公文包',kind:'routine',watchType:'state',status:{normal:'已带走',attention:'可能遗忘',unknown:'位置待确认'},
     trend:{window:'近 7 次外出',label:'检查时机',value:'开门离家时',note:'只在可返回的时刻提示行动'},
     timeline:{
       normal:[['08:00','记录玄关桌面的公文包'],['08:31','开门事件触发一次快照'],['08:31','桌面已无公文包，静默结束']],
@@ -65,7 +67,7 @@ const FOCUS_DETAILS = {
     },
   },
   rain: {
-    title:'雨天阳台状态',kind:'routine',status:{normal:'已经准备好',attention:'阳台需查看',unknown:'暂无法确认'},
+    title:'雨天阳台状态',kind:'routine',watchType:'state',status:{normal:'已经准备好',attention:'阳台需查看',unknown:'暂无法确认'},
     trend:{window:'近 7 次降雨检查',label:'触发方式',value:'天气变化时',note:'天气只负责唤醒，结论仍需画面证据'},
     timeline:{
       normal:[['15:10','收到即将降雨信号'],['15:10','核对窗户和晾衣架'],['15:11','窗户关闭且无衣物，保持安静']],
@@ -74,7 +76,7 @@ const FOCUS_DETAILS = {
     },
   },
   basket: {
-    title:'零食篮位置',kind:'security',status:{normal:'仍在原位',attention:'位置已变化',unknown:'暂无法确认'},
+    title:'零食篮位置',kind:'security',watchType:'state',status:{normal:'仍在原位',attention:'位置已变化',unknown:'暂无法确认'},
     trend:{window:'近 7 次位置复核',label:'判断基线',value:'门口指定区域',note:'遮挡时保留未知，不推断被拿走'},
     timeline:{
       normal:[['11:00','记录零食篮在门口的初始位置'],['11:23','人员活动触发位置比较'],['11:24','目标仍在原位置']],
@@ -83,12 +85,28 @@ const FOCUS_DETAILS = {
     },
   },
   turtle: {
-    title:'乌龟越线观察',kind:'care',status:{normal:'仍在鱼缸内',attention:'已越过边缘',unknown:'目标看不清'},
+    title:'乌龟越线观察',kind:'care',watchType:'risk',status:{normal:'仍在鱼缸内',attention:'已越过边缘',unknown:'目标看不清'},
     trend:{window:'最近 7 次复核',label:'复核频率',value:'约每 30 分钟',note:'小目标采用低频快照，不能承诺实时发现'},
+    riskHistory:{window:'最近 7 次复核',quiet:'6 次',events:'1 次',note:'模拟历史：低频快照之间可能存在未观察到的变化'},
+    riskStages:['定时取得鱼缸快照','核对乌龟与边缘警戒线','确认越线后提醒查看'],
     timeline:{
       normal:[['09:00','鱼缸边缘警戒线开始观察'],['09:30','定时取得本轮快照'],['09:31','未发现乌龟跨过边缘']],
       attention:[['09:30','本轮快照触发边缘比较'],['09:31','乌龟位于警戒线外侧'],['09:31','附当前画面提醒尽快查看']],
       unknown:[['09:30','取得本轮鱼缸快照'],['09:31','反光或遮挡影响目标识别'],['09:31','保留未知，下轮继续复核']],
+    },
+  },
+  moments: {
+    title:'Buddy 精彩瞬间',kind:'discovery',watchType:'discovery',status:{normal:'最近 24 小时发现 3 个瞬间',attention:'发现特别瞬间',unknown:'暂无可靠内容'},
+    trend:{window:'过去 30 天',label:'已收藏回忆',value:'28 个瞬间',note:'演示样本：仅将清晰、非重复的片段加入回忆'},
+    discoveries:[
+      {time:'今日 09:20',title:'慢慢醒来的早晨',description:'Buddy 在沙发上安静休息。',photo:'buddy-rest.jpg'},
+      {time:'昨日 14:30',title:'和玩具的下午',description:'Buddy 抱着小玩具，留下一个有趣的瞬间。',photo:'buddy-play.jpg'},
+      {time:'昨日 18:10',title:'晚餐前的小期待',description:'它坐在饭盆旁，安静等待晚餐。',photo:'buddy-feeding.jpg'},
+    ],
+    timeline:{
+      normal:[['昨日 14:30','记录 Buddy 抱着玩具的动作'],['今日 09:20','发现 Buddy 在沙发上安静休息'],['今日 10:00','筛选最近 24 小时的清晰片段并生成回忆']],
+      attention:[['昨日 14:30','发现 Buddy 与玩具的特别互动'],['今日 09:55','片段通过清晰度与重复度检查'],['今日 10:00','生成一条回忆邀请']],
+      unknown:[['09:55','候选片段画面不清晰'],['10:00','没有足够内容，今天不生成回忆']],
     },
   },
 };

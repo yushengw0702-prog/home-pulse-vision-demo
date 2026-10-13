@@ -28,7 +28,7 @@ const SCENARIOS = [
     action:'查看阳台窗并确认', normalRoute:'首页确认卡 · 不制造警报', alertRoute:'温和提醒 · 指向具体窗户', unknownRoute:'待确认卡 · 不推断锁闭',
   },
   {
-    id:'petdamage', no:'1.3', group:'宠物照护', name:'Buddy 客厅活动', object:'Buddy 与客厅沙发', icon:'paw', photo:'dog-sofa.jpg', zone:'客厅沙发与垃圾桶', source:'客厅摄像头', trigger:'宠物活动事件', schedule:'家中无人时', priority:'urgent',
+    id:'petdamage', no:'1.3', group:'宠物照护', name:'Buddy 客厅活动', object:'Buddy 与客厅沙发', icon:'paw', photo:'buddy-rest.jpg', zone:'客厅沙发与垃圾桶', source:'客厅摄像头', trigger:'宠物活动事件', schedule:'家中无人时', priority:'urgent',
     prompt:'我上班时帮我看看宠物有没有乱咬沙发或翻垃圾桶', keywords:['拆家','沙发','垃圾桶','乱咬'],
     understand:'区分普通走动、睡觉与持续破坏行为。', ground:'确认沙发和垃圾桶处于可观察区域。', rule:'宠物事件唤醒分析；普通活动静默，持续破坏才高优先提醒。', limit:'仅凭宠物靠近家具不能认定为破坏。',
     armed:['客厅活动正在守护','普通散步和休息不会打扰你。','09:00 · 已就绪'],
@@ -130,6 +130,19 @@ const SCENARIOS = [
     resolved:['乌龟状态已由你确认','本次风险已处理，低频复核继续。','09:36 · 用户确认'],
     evidence:['评估小目标的触发边界','设置鱼缸边缘警戒线','低频定时快照并对比','跨线时发出截图提醒'],
     action:'查看鱼缸并将乌龟放回', normalRoute:'后台静默 · 下一轮继续', alertRoute:'关注通知 · 附越线截图', unknownRoute:'待确认 · 等下一轮或查看画面',
+  },
+  {
+    id:'moments', no:'D.1', group:'生活回忆', name:'Buddy 精彩瞬间', object:'Buddy', icon:'spark', photo:'buddy-rest.jpg', zone:'客厅活动区域', source:'客厅摄像头', trigger:'宠物活动事件与每日汇总', schedule:'每天 10:00', priority:'memory',
+    prompt:'每天 10 点给我看看 Buddy 可爱的瞬间', keywords:['可爱','照片','精彩瞬间','回忆','晒太阳','玩耍'],
+    understand:'从 Buddy 的日常活动里发现值得回看的时刻，汇成一份温暖的每日回忆。', ground:'在已授权的客厅画面中寻找 Buddy 的活动片段，并去掉模糊或重复画面。', rule:'记录有趣动作、互动和安静的温馨时刻；每天 10:00 汇总最近 24 小时符合偏好的内容。', limit:'只有清晰可辨的片段才进入回忆；没有可靠画面时不编造精彩瞬间。',
+    armed:['正在收集 Buddy 的生活瞬间','值得回看的内容会在每天 10:00 汇总。','09:00 · 发现任务已开启'],
+    observing:['正在整理最近 24 小时的画面','已找到候选片段，正在筛除模糊和重复内容。','09:55 · 内容整理中'],
+    normal:['发现 3 个值得记录的时刻','Buddy 最近 24 小时的回忆已生成，可以慢慢回看。','10:00 · 每日回忆'],
+    attention:['发现 Buddy 一个特别的瞬间','最近的画面里有一段值得单独保存的玩耍片段。','10:00 · 回忆邀请'],
+    unknown:['今天暂无可靠的精彩画面','画面不清晰或没有符合偏好的片段，今天先不生成回忆。','10:00 · 静默记录'],
+    resolved:['这段回忆已收藏','已加入 Buddy 的成长记录，后续仍会继续发现。','10:05 · 用户收藏'],
+    evidence:['宠物活动提供候选片段','检查画面清晰度与重复内容','筛选互动、有趣动作与温馨时刻','每天 10:00 汇成一份回忆'],
+    action:'回看并收藏喜欢的瞬间', normalRoute:'每天 10:00 一条回忆邀请', alertRoute:'特别瞬间单独加入回忆', unknownRoute:'没有可靠内容时不打扰',
   },
 ];
 const SCENE_MAP = Object.fromEntries(SCENARIOS.map(scene => [scene.id, scene]));

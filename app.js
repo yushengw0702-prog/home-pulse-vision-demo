@@ -48,8 +48,9 @@ function esc(value) {
 
 const PHASES = ['draft','armed','observing','normal','attention','unknown','resolved'];
 const PHASE_LABEL = {draft:'尚未创建',armed:'守护中',observing:'核对中',normal:'已确认',attention:'需要关注',unknown:'无法确认',resolved:'已处理'};
+const phaseLabel = (id,p) => id==='moments'?({draft:'尚未创建',armed:'正在发现',observing:'正在整理',normal:'今日已生成',attention:'特别发现',unknown:'暂无内容',resolved:'已收藏'}[p]||PHASE_LABEL[p]):PHASE_LABEL[p];
 const OBJECTS = [
-  {id:'buddy',name:'Buddy',kind:'金毛 · 3岁',icon:'paw',photo:'buddy-feeding.jpg',scenes:['meal','petdamage']},
+  {id:'buddy',name:'Buddy',kind:'金毛 · 3岁',icon:'paw',photo:'buddy-feeding.jpg',scenes:['meal','petdamage','moments']},
   {id:'doorstep',name:'门口',kind:'包裹与来访',icon:'package',photo:'package-door.jpg',scenes:['parcel','basket']},
   {id:'entry',name:'玄关',kind:'出入与离家',icon:'home',photo:'front-door-day.jpg',scenes:['away','briefcase']},
   {id:'child',name:'小朋友',kind:'到家状态',icon:'person',photo:'front-door-day.jpg',scenes:['child']},
@@ -59,7 +60,7 @@ const OBJECTS = [
 ];
 const objectForScene = id => OBJECTS.find(item=>item.scenes.includes(id)) || OBJECTS[0];
 const state = {
-  page:'home', sceneId:'meal', objectTab:'buddy', phaseById:{meal:'normal',petdamage:'normal',parcel:'normal',basket:'normal',child:'normal',rain:'normal'}, created:new Set(['meal','petdamage','parcel','basket','child','rain']),
+  page:'home', sceneId:'meal', objectTab:'buddy', phaseById:{meal:'normal',petdamage:'normal',moments:'normal',parcel:'normal',basket:'normal',child:'normal',rain:'normal'}, created:new Set(['meal','petdamage','moments','parcel','basket','child','rain']),
   returnPage:'home', agentStep:0, agentBusy:null, agentPrompt:'', agentSource:'best', agentAwaiting:false, agentChoice:null, agentCustomArea:false, agentAreaMarked:false, agentAdjust:false, agentRunId:0,
   zoneEdit:false, zoneX:35, zoneY:27, agentSuggestion:false, modal:'', toast:'',
   notices:[], bannerNoticeId:null, activeNoticeId:null, noticeReturnPage:'notifications', savedMemories:new Set(), guardEnabled:false,
@@ -75,14 +76,14 @@ const phaseInfo = (s=scene(), p=phase()) => {
   return info;
 };
 const image = name => asset(name);
-const tone = (s=scene(),p=phase()) => p==='attention' ? (s.priority==='urgent'?'security':'care') : p==='unknown'?'unknown':'normal';
-const badgeClass = p => p==='attention'?'orange':p==='unknown'?'gray':p==='normal'||p==='resolved'?'green':'';
-const isPending = p => p==='attention'||p==='unknown';
+const tone = (s=scene(),p=phase()) => s.id==='moments'?'normal':p==='attention' ? (s.priority==='urgent'?'security':'care') : p==='unknown'?'unknown':'normal';
+const badgeClass = (p,id) => id==='moments'&&['normal','attention'].includes(p)?'purple':p==='attention'?'orange':p==='unknown'?'gray':p==='normal'||p==='resolved'?'green':'';
+const isPending = (p,id) => id!=='moments'&&(p==='attention'||p==='unknown');
 let busyTimer, toastTimer, bannerTimer;
 function noticeSpec(id,p){
   const s=SCENE_MAP[id], policy=NOTICE_POLICIES[id]?.[p];
   if(!s||!policy)return null;
-  const level=state.focusPrefs[id]==='exception'&&p==='normal'?Math.min(policy.level,1):policy.level;
+  const level=(state.focusPrefs[id]==='exception'||id==='moments'&&state.focusPrefs[id]==='special')&&p==='normal'?Math.min(policy.level,1):policy.level;
   return {sceneId:id,phase:p,type:policy.type,level,title:policy.title||s[p][0],body:policy.body||s[p][1],time:s[p][2].split(' · ')[0],why:policy.why||s.ground,baseline:policy.baseline||'',description:policy.description||'',action:s.action};
 }
 function activeNotice(){return state.notices.find(n=>n.id===state.activeNoticeId)||null;}
@@ -90,28 +91,29 @@ function noticeIcon(n){return icon(NOTICE_TYPES[n.type]?.icon||'bell',17);}
 
 function statusBar(){return `<div class="status-bar"><span>9:41</span><span class="status-icons">${icon('bars')}${icon('wifi')}<span class="battery"></span></span></div>`;}
 function appBar(){
-  const title={home:'Home Pulse',attention:'我的关注',agent:'Home Pulse AI',notifications:'通知',detail:'关注详情','notice-detail':activeNotice()?.type==='memory'?'今日回忆':activeNotice()?.type==='alert'?'安全事件':'状态详情'}[state.page];
+  const noticeTask=activeNotice()?FOCUS_DETAILS[activeNotice().sceneId]?.watchType:null;
+  const title={home:'Home Pulse',attention:'我的关注',agent:'Home Pulse AI',notifications:'通知',detail:'关注详情','notice-detail':noticeTask==='discovery'?'生活回忆':noticeTask==='risk'?'风险事件':'状态事件'}[state.page];
   const sub={attention:'值得留意的家与人',agent:state.agentMode==='chat'?'聊聊家里现在怎么样':state.agentMode==='manage'?'调整一件持续关注':'把关心变成持续观察',notifications:'按意义触达',detail:'持续关注事项','notice-detail':'AI 判断与下一步'}[state.page];
   return `<header class="app-bar"><button class="round-button" ${state.page==='home'?'data-page="attention" aria-label="我的关注"':'data-action="back" aria-label="返回"'}>${icon(state.page==='home'?'heart':'back')}</button><div class="app-bar-title">${esc(title)}${sub?`<small>${esc(sub)}</small>`:''}</div><button class="round-button ${state.notices.length?'alert-dot':''}" data-page="notifications" aria-label="查看通知">${icon('bell')}</button></header>`;
 }
 function footer(){return `<nav class="phone-footer" aria-label="主导航"><button class="nav-button ${state.page==='home'?'active':''}" data-page="home">${icon('home')}<span>首页</span></button><button class="nav-button ${state.page==='attention'?'active':''}" data-page="attention">${icon('heart')}<span>关注</span></button><button class="nav-button ${state.page==='agent'?'active':''}" data-page="agent">${icon('chat')}<span>Agent</span></button><button class="nav-button ${state.page==='notifications'||state.page==='notice-detail'?'active':''}" data-page="notifications">${icon('bell')}<span>通知</span></button></nav>`;}
 function sidePanels(){
-  const links=[['home','01','家庭状态','一眼知道家里怎么样'],['attention','02','我的关注','10 个场景均可建立关注'],['agent','03','Home Pulse Agent','自动执行，关键节点确认'],['notifications','04','通知与处理','按状态分配注意力']].map(([key,no,title,sub])=>`<button class="stage-link ${state.page===key?'active':''}" data-page="${key}"><span class="num">${no}</span><span><strong>${title}</strong><small>${sub}</small></span>${icon('chevron')}</button>`).join('');
+  const links=[['home','01','家庭状态','一眼知道家里怎么样'],['attention','02','我的关注','十个核心场景与主动发现'],['agent','03','Home Pulse Agent','自动执行，关键节点确认'],['notifications','04','通知与处理','按状态分配注意力']].map(([key,no,title,sub])=>`<button class="stage-link ${state.page===key?'active':''}" data-page="${key}"><span class="num">${no}</span><span><strong>${title}</strong><small>${sub}</small></span>${icon('chevron')}</button>`).join('');
   const s=scene(),p=phase();
   const options=SCENARIOS.map(x=>`<option value="${x.id}" ${x.id===s.id?'selected':''}>${x.no} · ${x.name}</option>`).join('');
-  const controls=PHASES.slice(1).map(key=>`<button class="control-phase ${p===key?'active':''}" data-console-phase="${key}" ${!state.created.has(s.id)?'disabled':''}><span class="phase-light ${key}"></span>${PHASE_LABEL[key]}</button>`).join('');
+  const controls=PHASES.slice(1).map(key=>`<button class="control-phase ${p===key?'active':''}" data-console-phase="${key}" ${!state.created.has(s.id)?'disabled':''}><span class="phase-light ${key}"></span>${phaseLabel(s.id,key)}</button>`).join('');
   const spec=noticeSpec(s.id,p);
-  const route=s.id==='petdamage'&&p==='normal'?'<strong>普通活动 L1 · 晚间回忆 L2</strong><span>首页静默更新 · 晚间一条邀请</span>':spec?`<strong>${esc(NOTICE_TYPES[spec.type].name)} · L${spec.level}</strong><span>${esc(ATTENTION_DELIVERY[spec.level])}</span>`:'<strong>观察中</strong><span>尚未形成提醒结论</span>';
+  const route=spec?`<strong>${esc(NOTICE_TYPES[spec.type].name)} · L${spec.level}</strong><span>${esc(ATTENTION_DELIVERY[spec.level])}</span>`:'<strong>观察中</strong><span>尚未形成提醒结论</span>';
   const showcase=NOTICE_SHOWCASES.map(item=>`<button class="showcase-button ${item.type}" data-console-showcase="${item.type}"><span class="showcase-icon">${icon(NOTICE_TYPES[item.type].icon,16)}</span><span>${esc(item.label)}</span>${icon('chevron',14)}</button>`).join('');
-  return `<aside class="stage-aside left"><div class="eyebrow">HOME PULSE · PRODUCT STORY</div><h1 class="stage-title">让家里的状态，<br>一眼就懂。</h1><p class="stage-description">从一句关心出发，经过可观察性确认，再用合适的方式把变化告诉你。</p><div class="step-list">${links}</div></aside><aside class="stage-aside right operator-console" aria-label="演示操作台"><div class="side-card"><div class="side-label"><span class="spark">✦</span> 场景操作台 · App 外</div><label class="console-label" for="console-scene">选择需求</label><select id="console-scene" class="console-select">${options}</select><p class="console-prompt">“${esc(s.prompt)}”</p><div class="console-actions"><button class="console-main" data-action="console-create">走完整创建链路</button><button class="console-secondary" data-action="console-seed">直接载入已创建</button></div><div class="console-divider"></div><label class="console-label">推进这个关注的状态</label><div class="phase-grid">${controls}</div><p class="console-status">当前：${esc(PHASE_LABEL[p])} · ${state.created.has(s.id)?'关注已创建':'请先创建关注'}</p><div class="console-route">${route}</div><div class="console-actions"><button class="console-secondary" data-action="console-home">查看 App 首页</button><button class="console-secondary" data-action="console-reset">重置此场景</button></div><div class="console-divider"></div><label class="console-label">一键演示四种通知</label><div class="showcase-list">${showcase}</div><p class="console-status">选择上方任一状态，也会按该对象的类型和注意力等级决定是否出现横幅。</p></div><div class="side-footnote">操作台只负责推进故事时间。App 内的页面、通知、判断依据和处理动作会随之变化。公开照片仅用于界面预览，不代表真实设备取证。</div></aside>`;
+  return `<aside class="stage-aside left"><div class="eyebrow">HOME PULSE · PRODUCT STORY</div><h1 class="stage-title">让家里的状态，<br>一眼就懂。</h1><p class="stage-description">从一句关心出发，经过可观察性确认，再用合适的方式把变化告诉你。</p><div class="step-list">${links}</div></aside><aside class="stage-aside right operator-console" aria-label="演示操作台"><div class="side-card"><div class="side-label"><span class="spark">✦</span> 场景操作台 · App 外</div><label class="console-label" for="console-scene">选择需求</label><select id="console-scene" class="console-select">${options}</select><p class="console-prompt">“${esc(s.prompt)}”</p><div class="console-actions"><button class="console-main" data-action="console-create">走完整创建链路</button><button class="console-secondary" data-action="console-seed">直接载入已创建</button></div><div class="console-divider"></div><label class="console-label">推进这个关注的状态</label><div class="phase-grid">${controls}</div><p class="console-status">当前：${esc(phaseLabel(s.id,p))} · ${state.created.has(s.id)?'关注已创建':'请先创建关注'}</p><div class="console-route">${route}</div><div class="console-actions"><button class="console-secondary" data-action="console-home">查看 App 首页</button><button class="console-secondary" data-action="console-reset">重置此场景</button></div><div class="console-divider"></div><label class="console-label">一键演示四种通知</label><div class="showcase-list">${showcase}</div><p class="console-status">选择上方任一状态，也会按该对象的类型和注意力等级决定是否出现横幅。</p></div><div class="side-footnote">操作台只负责推进故事时间。App 内的页面、通知、判断依据和处理动作会随之变化。公开照片仅用于界面预览，不代表真实设备取证。</div></aside>`;
 }
-function homeMood(){const active=SCENARIOS.filter(s=>state.created.has(s.id));return active.some(s=>phase(s.id)==='attention'&&noticeSpec(s.id,'attention')?.type==='alert')?'security':active.some(s=>phase(s.id)==='attention')?'care':active.some(s=>phase(s.id)==='unknown')?'unknown':'normal';}
+function homeMood(){const active=SCENARIOS.filter(s=>state.created.has(s.id)&&s.id!=='moments');return active.some(s=>phase(s.id)==='attention'&&noticeSpec(s.id,'attention')?.type==='alert')?'security':active.some(s=>phase(s.id)==='attention')?'care':active.some(s=>phase(s.id)==='unknown')?'unknown':'normal';}
 function mascot(){const mood=homeMood();return `<div class="mascot ${mood}" aria-hidden="true"><div class="face"><span class="eye left"></span><span class="eye right"></span><span class="mouth"></span></div></div>`;}
-function attentionCount(){return SCENARIOS.filter(s=>isPending(phase(s.id))).length;}
+function attentionCount(){return SCENARIOS.filter(s=>isPending(phase(s.id),s.id)).length;}
 function activeCount(){return state.created.size;}
 function sceneCard(s, opts={}){
   const p=phase(s.id), f=phaseInfo(s,p), selected=state.sceneId===s.id;
-  return `<button class="story-card glass-card ${selected?'selected':''}" data-open-scene="${s.id}"><span class="story-image"><img src="${image(s.photo)}" alt="${esc(s.object)}区域预览"><span class="story-icon">${icon(s.icon)}</span></span><span class="story-copy"><small>${s.no} · ${esc(s.group)}</small><strong>${esc(s.name)}</strong><em>${esc(f[0])}</em></span><span class="story-state ${p}">${esc(PHASE_LABEL[p])}</span></button>`;
+  return `<button class="story-card glass-card ${selected?'selected':''}" data-open-scene="${s.id}"><span class="story-image"><img src="${image(s.photo)}" alt="${esc(s.object)}区域预览"><span class="story-icon">${icon(s.icon)}</span></span><span class="story-copy"><small>${s.no} · ${esc(s.group)}</small><strong>${esc(s.name)}</strong><em>${esc(f[0])}</em></span><span class="story-state ${p}">${esc(phaseLabel(s.id,p))}</span></button>`;
 }
 function homePage(){
   const pending=attentionCount();
@@ -123,12 +125,12 @@ function homePage(){
   const remaining=current.scenes.map(id=>SCENE_MAP[id]).filter(s=>s&&!state.created.has(s.id));
   const tabs=OBJECTS.map(item=>{
     const count=item.scenes.filter(id=>state.created.has(id)).length;
-    const alert=item.scenes.some(id=>isPending(phase(id)));
+    const alert=item.scenes.some(id=>isPending(phase(id),id));
     return `<button class="object-tab ${item.id===current.id?'active':''}" data-object-tab="${item.id}" aria-pressed="${item.id===current.id}"><span class="object-tab-icon">${icon(item.icon,17)}${alert?'<i class="object-alert"></i>':''}</span><span>${esc(item.name)}</span>${count?`<small>${count}</small>`:''}</button>`;
   }).join('');
   const cards=active.map(s=>{
     const p=phase(s.id),f=phaseInfo(s,p);
-    return `<button class="concern-card glass-card ${p}" data-open-scene="${s.id}"><span class="concern-icon ${badgeClass(p)}">${icon(s.icon,20)}</span><span class="concern-copy"><span class="concern-top"><strong>${esc(s.name)}</strong><em class="badge ${badgeClass(p)}">${esc(PHASE_LABEL[p])}</em></span><span class="concern-status">${esc(f[0])}</span><span class="concern-meta">${esc(f[2])}</span></span><span class="concern-arrow">${icon('chevron',16)}</span></button>`;
+    return `<button class="concern-card glass-card ${p} ${s.id==='moments'?'discovery':''}" data-open-scene="${s.id}"><span class="concern-icon ${badgeClass(p,s.id)}">${icon(s.icon,20)}</span><span class="concern-copy"><span class="concern-top"><strong>${esc(s.name)}</strong><em class="badge ${badgeClass(p,s.id)}">${esc(phaseLabel(s.id,p))}</em></span><span class="concern-status">${esc(f[0])}</span><span class="concern-meta">${esc(f[2])}</span></span><span class="concern-arrow">${icon('chevron',16)}</span></button>`;
   }).join('');
   const ideas=remaining.map(s=>`<button class="concern-create" data-create="${s.id}">${icon('plus',16)} 新建「${esc(s.name)}」</button>`).join('');
   return `<section class="hero home-hero"><div class="mascot-space">${mascot()}</div><h1>${title}</h1><p>${esc(summary)}</p><button class="attention-pill ${mood}" data-page="attention">${icon(pending?'alert':'checkCircle')} ${pending?`${pending} 项需要留意`:`${activeCount()} 项关注守护中`} ${icon('chevron')}</button></section><div class="section-heading object-heading"><div><h2>关注对象</h2><p>选择一个对象，快速查看它的每件事</p></div></div><div class="object-tabs" aria-label="关注对象">${tabs}</div><div class="object-section-head"><img src="${image(current.photo)}" alt=""><span><strong>${esc(current.name)}</strong><small>${esc(current.kind)} · ${active.length} 项持续关注</small></span></div><div class="concern-list">${cards||'<div class="glass-card empty-object">这里还没有关注事项。点按下方新建，让 Home Pulse 先理解你在意什么。</div>'}${ideas}</div><div class="home-section-end">每件关注都有自己的判断依据与提醒方式</div>`;
@@ -141,6 +143,11 @@ function attentionPage(){
 function agentRow(body){return `<div class="agent-row"><div class="agent-mini">✦</div><div class="glass-card agent-card">${body}</div></div>`;}
 function agentManagePage(){
   const s=SCENE_MAP[state.manageSceneId]||scene();
+  if(s.id==='moments'){
+    const preference=state.focusPrefs.moments==='special'?'仅特别瞬间通知':'每天 10:00 回忆邀请';
+    const messages=state.manageMessages.map(item=>`<div class="chat-message ${item.role}">${item.role==='assistant'?'<span class="chat-avatar">✦</span>':''}<div class="chat-bubble">${esc(item.text)}${item.done?`<button data-open-scene="moments">返回发现任务 ${icon('chevron',14)}</button>`:''}</div></div>`).join('');
+    return `<div class="manage-intro"><span class="agent-orb">✦</span><small>正在调整 · Buddy</small><h1>Buddy 精彩瞬间</h1><p>我会继续寻找有趣与温馨的片段。你可以调整回忆送达的方式。</p></div><div class="glass-card manage-current"><span>当前反馈</span><strong>${preference}</strong><small>照片 + AI 描述 · 画面不清晰时不生成</small></div><div class="chat-thread manage-thread"><div class="chat-message assistant"><span class="chat-avatar">✦</span><div class="chat-bubble">想继续每天 10:00 看回忆，还是只在发现特别瞬间时通知？</div></div>${messages}${state.manageBusy?`<div class="chat-message assistant"><span class="chat-avatar">✦</span><div class="chat-bubble typing">正在核对回忆反馈方式<span class="thinking-dots"><b></b><b></b><b></b></span></div></div>`:''}</div><div class="manage-quick"><button data-manage-choice="每天10点给我回忆">每天 10:00 回忆</button><button data-manage-choice="只在特别瞬间通知我">仅特别瞬间通知</button></div><form class="agent-input chat-input" id="manage-form"><label class="sr-only" for="manage-prompt">调整回忆反馈</label><input id="manage-prompt" placeholder="说说你想怎样收到回忆…" autocomplete="off" ${state.manageBusy?'disabled':''}><button type="submit" aria-label="发送调整要求" ${state.manageBusy?'disabled':''}>${icon('send')}</button></form>`;
+  }
   const pref=state.focusPrefs[s.id]==='exception'?'仅异常提醒':'智能提醒';
   const messages=state.manageMessages.map(item=>`<div class="chat-message ${item.role}">${item.role==='assistant'?'<span class="chat-avatar">✦</span>':''}<div class="chat-bubble">${esc(item.text)}${item.done?`<button data-open-scene="${s.id}">返回关注详情 ${icon('chevron',14)}</button>`:''}</div></div>`).join('');
   return `<div class="manage-intro"><span class="agent-orb">✦</span><small>正在调整 · ${esc(s.object)}</small><h1>${esc(s.name)}</h1><p>告诉我你希望怎样被提醒，我会保留原有观察与判断边界。</p></div><div class="glass-card manage-current"><span>当前提醒方式</span><strong>${pref}</strong><small>${esc(s.schedule)} · ${esc(s.source)}</small></div><div class="chat-thread manage-thread"><div class="chat-message assistant"><span class="chat-avatar">✦</span><div class="chat-bubble">我会继续关注${esc(s.object)}。你想调整提醒方式吗？例如「只在异常时提醒我」。</div></div>${messages}${state.manageBusy?`<div class="chat-message assistant"><span class="chat-avatar">✦</span><div class="chat-bubble typing"><span class="thinking-orb"><i></i></span>正在核对提醒偏好与现有关注<span class="thinking-dots"><b></b><b></b><b></b></span></div></div>`:''}</div><div class="manage-quick"><button data-manage-choice="只在异常时提醒我">只在异常时提醒</button><button data-manage-choice="恢复智能提醒">恢复智能提醒</button></div><form class="agent-input chat-input" id="manage-form"><label class="sr-only" for="manage-prompt">调整这项关注</label><input id="manage-prompt" placeholder="说说你想怎样调整提醒…" autocomplete="off" ${state.manageBusy?'disabled':''}><button type="submit" aria-label="发送调整要求" ${state.manageBusy?'disabled':''}>${icon('send')}</button></form>`;
@@ -163,22 +170,22 @@ function agentPage(){
   if(state.agentMode==='chat')return agentChatPage();
   if(state.agentMode==='manage')return agentManagePage();
   const s=scene(),plan=AGENT_PLANS[s.id],hasRun=state.agentStep>0||state.agentBusy||state.agentAwaiting;
-  const policy=NOTICE_POLICIES[s.id],kind={security:'安全守护',care:'状态照护',routine:'日常行动'}[FOCUS_DETAILS[s.id].kind]||'持续关注';
+  const policy=NOTICE_POLICIES[s.id],isDiscovery=s.id==='moments',kind={security:'安全守护',care:'状态照护',routine:'日常行动',discovery:'主动发现'}[FOCUS_DETAILS[s.id].kind]||'持续关注';
   const route=(p)=>`L${policy[p].level} · ${ATTENTION_DELIVERY[policy[p].level]}`;
   let flow='';
   if(hasRun){
     flow+=`<div class="user-message">${esc(state.agentPrompt||s.prompt)}</div><div class="agent-timeline"><div class="agent-stream-lead"><span class="agent-mini">✦</span><p>好的，我会先确认这件事能否持续观察，再安排判断和提醒。</p></div>${agentProgress()}`;
     if(state.agentStep>=1)flow+=agentSection('正在理解你的关注',`<p>你希望我长期留意 <strong>${esc(s.object)}</strong>，目标是${esc(plan.goal)}。</p>${agentAction(`已识别关注对象：${s.object}`)}${agentAction(`已识别目标：${plan.goal}`)}${agentAction(`关注时机：${s.schedule}`)}`);
-    if(state.agentStep>=2)flow+=agentSection('正在建立关注模型',`<p>这是「${esc(kind)}」。我会跟踪状态变化，而不把每次画面活动都当作提醒。</p><div class="agent-inline-rules"><p><b>正常</b>${esc(s.normal[0])}</p><p><b>需要关注</b>${esc(s.attention[0])}</p><p><b>无法确认</b>${esc(s.unknown[0])}</p></div>`);
+    if(state.agentStep>=2)flow+=agentSection(isDiscovery?'正在建立发现方式':'正在建立关注模型',`<p>${isDiscovery?'这是「主动发现」。我会寻找值得记录的内容，而不是把每次活动都当成提醒。':`这是「${esc(kind)}」。我会跟踪状态变化，而不把每次画面活动都当作提醒。`}</p><div class="agent-inline-rules"><p><b>${isDiscovery?'发现':'正常'}</b>${esc(s.normal[0])}</p><p><b>${isDiscovery?'特别':'需要关注'}</b>${esc(s.attention[0])}</p><p><b>${isDiscovery?'未发现':'无法确认'}</b>${esc(s.unknown[0])}</p></div>`);
     if(state.agentStep>=3)flow+=agentSection('正在寻找可以观察它的“眼睛”',`${agentAction(`已匹配：${s.source}`)}${agentAction(`找到：${plan.found}`)}<p>${esc(plan.sourceWhy)}</p><div class="agent-inline-media"><img src="${image(s.photo)}" alt="${esc(s.zone)}示意预览"><span><strong>${esc(s.source)}</strong><small>公开图片仅示意观察范围，不代表真实设备识别结果</small></span></div>`);
     if(state.agentAwaiting&&plan.ask){
       flow+=agentSection('这里需要你判断',`<p>${esc(plan.ask.title)} ${esc(plan.ask.body)}</p><div class="agent-ambiguity-card"><div class="agent-ambiguity-preview"><img src="${image(s.photo)}" alt="${esc(s.object)}位置示意"><span class="agent-map-pin one">1</span><span class="agent-map-pin two">2</span><small>观察位置示意</small></div>${state.agentCustomArea?`<div class="camera-frame region-frame editing" data-action="position-zone"><img src="${image(s.photo)}" alt="请点选观察位置"><span class="selection-box" style="--zone-x:${state.zoneX}%;--zone-y:${state.zoneY}%"><span>观察位置</span></span></div><p class="agent-choice-hint">点击画面标记位置，再继续。</p><button class="primary-button full" data-action="agent-mark-area" ${state.agentAreaMarked?'':'disabled'}>使用我标记的位置</button>`:`<div class="agent-choice-list">${plan.ask.choices.map((label,index)=>`<button data-agent-choice="${index}"><span>${index+1}</span><strong>${esc(label)}</strong>${icon('chevron',15)}</button>`).join('')}<button data-action="agent-none"><span>?</span><strong>都不是，我来标记</strong>${icon('chevron',15)}</button></div>`}</div>`);
     }
     if(state.agentStep>=4)flow+=agentSection('观察范围已确定',`<p>我会看 <strong>${esc(agentAreaLabel(s,plan))}</strong>，并在证据不足时保留“无法确认”。</p>${agentAction(`观察范围：${agentAreaLabel(s,plan)}`)}<p class="agent-subtle">${esc(s.limit)}</p>`);
     if(state.agentStep>=5)flow+=agentSection('正在建立判断规则',`<p>${esc(plan.decision)}</p>${agentAction(`触发时机：${s.trigger}`)}${agentAction(`判断依据：${s.rule}`)}<p class="agent-subtle">证据边界：${esc(s.limit)}</p>`);
-    if(state.agentStep>=6)flow+=agentSection('正在分配注意力与反馈',`<p>我会按变化的重要程度决定何时打扰你。</p><div class="agent-routing"><p><span>正常 · ${route('normal')}</span>${esc(s.normalRoute)}</p><p><span>异常 · ${route('attention')}</span>${esc(s.alertRoute)}</p><p><span>未知 · ${route('unknown')}</span>${esc(s.unknownRoute)}</p></div><p class="agent-subtle">${esc(plan.notify)}</p>`);
-    if(state.agentStep===7)flow+=`<div class="agent-final-lead">观察方式已准备好。确认后，我会按下面的约定开始守护。</div><div class="glass-card agent-confirm-card"><div class="agent-confirm-head"><span class="mini-icon">${icon(s.icon,21)}</span><div><small>持续关注 · ${esc(kind)}</small><h3>${esc(s.name)}</h3></div></div><div class="agent-confirm-row"><span>关注对象</span><strong>${esc(s.object)}</strong></div><div class="agent-confirm-row"><span>观察位置</span><strong>${esc(agentAreaLabel(s,plan))}</strong></div><div class="agent-confirm-row"><span>关注时机</span><strong>${esc(s.schedule)}</strong></div><div class="agent-confirm-row"><span>判断</span><strong>正常 / 异常 / 无法确认</strong></div><div class="agent-confirm-row"><span>提醒</span><strong>${esc(plan.notify)}</strong></div><button class="primary-button full agent-start-button" data-action="agent-confirm">开始守护</button></div>`;
-    if(state.agentStep>=8)flow+=`<div class="agent-complete-message"><span class="agent-mini">✦</span><div><p>好的，<strong>${esc(s.name)}</strong>已经开始。</p><p>正常时我会按约定更新状态；需要你关注或无法确认时，我会说明原因并提供下一步。</p><div class="agent-complete-actions"><button data-action="open-detail">查看关注详情 ${icon('chevron',14)}</button><button data-action="agent-adjust">调整观察区域</button><button data-action="manage-focus">调整提醒</button></div></div></div>`;
+    if(state.agentStep>=6)flow+=agentSection('正在分配注意力与反馈',`<p>${isDiscovery?'我会把发现汇成回忆邀请，没有可靠内容时保持安静。':'我会按变化的重要程度决定何时打扰你。'}</p><div class="agent-routing"><p><span>${isDiscovery?'每日回忆':'正常'} · ${route('normal')}</span>${esc(s.normalRoute)}</p><p><span>${isDiscovery?'特别瞬间':'异常'} · ${route('attention')}</span>${esc(s.alertRoute)}</p><p><span>${isDiscovery?'无可靠内容':'未知'} · ${route('unknown')}</span>${esc(s.unknownRoute)}</p></div><p class="agent-subtle">${esc(plan.notify)}</p>`);
+    if(state.agentStep===7)flow+=`<div class="agent-final-lead">观察方式已准备好。确认后，我会按下面的约定开始守护。</div><div class="glass-card agent-confirm-card"><div class="agent-confirm-head"><span class="mini-icon">${icon(s.icon,21)}</span><div><small>持续关注 · ${esc(kind)}</small><h3>${esc(s.name)}</h3></div></div><div class="agent-confirm-row"><span>关注对象</span><strong>${esc(s.object)}</strong></div><div class="agent-confirm-row"><span>观察位置</span><strong>${esc(agentAreaLabel(s,plan))}</strong></div><div class="agent-confirm-row"><span>关注时机</span><strong>${esc(s.schedule)}</strong></div><div class="agent-confirm-row"><span>判断</span><strong>${isDiscovery?'发现 / 特别 / 未发现':'正常 / 异常 / 无法确认'}</strong></div><div class="agent-confirm-row"><span>提醒</span><strong>${esc(plan.notify)}</strong></div><button class="primary-button full agent-start-button" data-action="agent-confirm">开始守护</button></div>`;
+    if(state.agentStep>=8)flow+=`<div class="agent-complete-message"><span class="agent-mini">✦</span><div><p>好的，<strong>${esc(s.name)}</strong>已经开始。</p><p>${isDiscovery?'我会继续寻找值得记录的瞬间，并按约定送来回忆邀请。':'正常时我会按约定更新状态；需要你关注或无法确认时，我会说明原因并提供下一步。'}</p><div class="agent-complete-actions"><button data-action="open-detail">查看关注详情 ${icon('chevron',14)}</button><button data-action="agent-adjust">调整观察区域</button><button data-action="manage-focus">调整提醒</button></div></div></div>`;
     if(state.agentStep>=8&&state.agentAdjust)flow+=agentRow(`<h3>调整观察区域</h3><p>你可以主动改动观察框。画面为示意，正式接入后以授权设备为准。</p><div class="camera-frame region-frame ${state.zoneEdit?'editing':''}" data-action="position-zone"><img src="${image(s.photo)}" alt="${esc(s.zone)}示意画面"><span class="camera-label">${esc(s.source)} · 示意预览</span><span class="selection-box" style="--zone-x:${state.zoneX}%;--zone-y:${state.zoneY}%"><span>${esc(s.object)}</span></span></div><button class="secondary-button full" data-action="adjust-zone">${state.zoneEdit?'停止移动观察框':'点击后调整观察框'}</button><button class="primary-button full agent-save-zone" data-action="agent-save-adjust">保存调整</button>`);
     if(state.agentBusy){const tasks=['识别关注对象与目标','建立正常、异常与未知状态','检查设备与可见区域','确认观察范围','整理判断依据','匹配提醒方式','生成守护约定'];flow+=`<div class="agent-working" role="status"><span class="thinking-orb"><i></i></span><span>正在${tasks[state.agentBusy.next-1]}<span class="thinking-dots"><b></b><b></b><b></b></span></span></div>`;}
     flow+='</div>';
@@ -191,9 +198,9 @@ function chatReply(question){
   if(matched){
     if(!state.created.has(matched.id))return {text:`我还没有开始关注「${matched.name}」。如果你愿意，可以先建立这个关注；我会确认观察区域和提醒边界。`,create:matched.id};
     const p=phase(matched.id),f=phaseInfo(matched,p);
-    return {text:`${f[0]}。${f[1]} 当前状态是「${PHASE_LABEL[p]}」。你可以点开查看判断依据。`,detail:matched.id};
+    return {text:`${f[0]}。${f[1]} 当前状态是「${phaseLabel(matched.id,p)}」。你可以点开查看判断依据。`,detail:matched.id};
   }
-  const pending=SCENARIOS.filter(s=>state.created.has(s.id)&&isPending(phase(s.id)));
+  const pending=SCENARIOS.filter(s=>state.created.has(s.id)&&isPending(phase(s.id),s.id));
   if(pending.length)return {text:`家里有 ${pending.length} 项关注需要留意：${pending.map(s=>s.name).join('、')}。其他关注仍在持续观察。`,detail:pending[0].id};
   return {text:`目前有 ${activeCount()} 项关注在运行，暂时没有需要你处理的变化。你可以问我具体对象，比如「Buddy 午餐怎么样？」或「门口包裹还在吗？」`};
 }
@@ -205,37 +212,10 @@ function noticesPage(){
   const cards=state.notices.slice().reverse();
   const quiet=SCENARIOS.filter(s=>state.created.has(s.id)&&['normal','unknown'].includes(phase(s.id))&&(noticeSpec(s.id,phase(s.id))?.level??0)<2);
   const rows=cards.map(n=>`<button class="notification ${n.type} ${n.handled?'handled':''}" data-notice="${n.id}"><div class="notice-top"><span class="notice-app-icon">${noticeIcon(n)}</span><span>HOME PULSE · ${esc(NOTICE_TYPES[n.type].short)}${n.handled?' · 已处理':''}</span><time>${esc(n.time)}</time></div><div class="notice-body"><div><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p></div><img src="${image(SCENE_MAP[n.sceneId].photo)}" alt="${esc(SCENE_MAP[n.sceneId].object)}预览"></div></button>`).join('');
-  return `<div class="page-heading"><div class="eyebrow">HOME PULSE · 通知</div><h1>值得打扰时，才打扰你</h1><p>安全、照护、回忆和日常行动，各用合适的语气告诉你。</p></div>${cards.length?`<div class="notice-stack">${rows}</div>`:'<div class="glass-card blank-card">目前没有主动通知。家庭状态仍在首页持续更新。</div>'}<div class="section-heading"><div><h2>留在家里的更新</h2><p>低注意力变化只更新状态，不弹出横幅</p></div></div>${quiet.map(s=>`<button class="quiet-row" data-open-scene="${s.id}"><span class="mini-icon green">${icon('checkCircle')}</span><span><strong>${esc(phaseInfo(s,phase(s.id))[0])}</strong><small>${esc(PHASE_LABEL[phase(s.id)])} · 未发送通知</small></span>${icon('chevron')}</button>`).join('')||'<p class="micro">当前没有静默更新。</p>'}`;
+  return `<div class="page-heading"><div class="eyebrow">HOME PULSE · 通知</div><h1>值得打扰时，才打扰你</h1><p>安全、照护、回忆和日常行动，各用合适的语气告诉你。</p></div>${cards.length?`<div class="notice-stack">${rows}</div>`:'<div class="glass-card blank-card">目前没有主动通知。家庭状态仍在首页持续更新。</div>'}<div class="section-heading"><div><h2>留在家里的更新</h2><p>低注意力变化只更新状态，不弹出横幅</p></div></div>${quiet.map(s=>`<button class="quiet-row" data-open-scene="${s.id}"><span class="mini-icon green">${icon('checkCircle')}</span><span><strong>${esc(phaseInfo(s,phase(s.id))[0])}</strong><small>${esc(phaseLabel(s.id,phase(s.id)))} · 未发送通知</small></span>${icon('chevron')}</button>`).join('')||'<p class="micro">当前没有静默更新。</p>'}`;
 }
-function noticeDetailPage(){
-  const n=activeNotice();if(!n)return '<div class="glass-card blank-card">这条通知暂时无法打开。</div>';
-  const s=SCENE_MAP[n.sceneId], type=NOTICE_TYPES[n.type];
-  const head=`<div class="notice-detail-head ${n.type}"><span class="notice-detail-icon">${noticeIcon(n)}</span><span class="notice-detail-type">${esc(type.name)} · ${esc(n.time)}</span><h1>${esc(n.title)}</h1><p>${esc(n.body)}</p></div>`;
-  if(n.type==='memory')return `${head}<div class="memory-hero notice-memory-photo"><img src="${image(s.photo)}" alt="Buddy 在客厅的回忆画面"><div class="memory-overlay"><small>今日 · Buddy</small><h1>三个值得回看的瞬间</h1></div></div><div class="glass-card notice-detail-section"><h2>今天的故事</h2><p>${esc(n.description)}</p><div class="notice-action-row"><button class="primary-button" data-action="save-memory">${icon('heart')} ${state.savedMemories.has(n.id)?'已收藏':'收藏回忆'}</button><button class="secondary-button" data-action="open-related-detail">查看关注记录</button></div></div><div class="notice-explanation">${icon('spark')} ${esc(n.why)}</div>`;
-  if(n.type==='alert')return `${head}<div class="glass-card notice-detail-section"><div class="notice-risk"><span>${icon('alert')} 需要关注</span><strong>${n.level===4?'立即处理':'高优先级'}</strong></div><h2>AI 发现了什么</h2><div class="notice-timeline"><div><time>01</time><span>${esc(s.evidence[0])}</span></div><div><time>02</time><span>${esc(s.evidence[1])}</span></div><div><time>03</time><span>${esc(s.evidence[3])}</span></div></div></div><div class="glass-card notice-detail-section"><h2>关键画面</h2><div class="evidence-frame"><img src="${image(s.photo)}" alt="${esc(s.object)}画面示意"><span class="camera-label">${esc(s.zone)} · 演示画面</span></div><p>${esc(n.why)}</p></div><div class="glass-card notice-detail-section"><h2>建议你现在</h2><p>${esc(n.action)}</p><div class="notice-action-row"><button class="primary-button" data-action="view-frame">查看实时画面</button><button class="secondary-button" data-action="guard-on">${state.guardEnabled?'已开启警戒':'开启警戒'}</button></div><button class="notice-text-button" data-action="resolve-notice">确认已处理</button></div>`;
-  if(n.type==='insight')return `${head}<div class="glass-card notice-detail-section"><h2>${esc(s.object)} · 当前状态</h2><div class="insight-current">${icon('clock')}<strong>${esc(PHASE_LABEL[n.phase])}</strong><span>${esc(n.body)}</span></div>${n.baseline?`<div class="insight-baseline"><small>日常节奏</small><strong>${esc(n.baseline)}</strong></div>`:''}<div class="insight-baseline"><small>判断依据</small><strong>${esc(n.why)}</strong></div></div><div class="glass-card notice-detail-section"><h2>可以怎么做</h2><p>${esc(n.action)}</p><div class="notice-action-row"><button class="primary-button" data-action="view-frame">查看相关画面</button><button class="secondary-button" data-action="resolve-notice">确认并处理</button></div></div>`;
-  return `${head}<div class="glass-card notice-detail-section"><h2>现在的情况</h2><div class="routine-photo"><img src="${image(s.photo)}" alt="${esc(s.object)}区域预览"><span>${esc(s.zone)}</span></div><p>${esc(n.why)}</p></div><div class="glass-card notice-detail-section"><h2>建议行动</h2><p>${esc(n.action)}</p><div class="notice-action-row"><button class="primary-button" data-action="resolve-notice">${n.handled?'已确认':'确认已处理'}</button><button class="secondary-button" data-action="view-frame">查看画面</button></div></div>`;
-}
-function detailPage(){
-  const s=scene(),p=phase(),f=phaseInfo(),meta=FOCUS_DETAILS[s.id],shownZone=state.focusZones[s.id]?.label||s.zone;
-  const status=meta.status[p]||PHASE_LABEL[p];
-  const recent=state.notices.filter(n=>n.sceneId===s.id).slice(-3).reverse();
-  const lastPhase=p==='resolved'?recent.find(n=>n.phase==='attention'||n.phase==='unknown')?.phase||'normal':p;
-  const facts=meta.timeline[lastPhase]||(p==='observing'?[[s.observing[2].split(' · ')[0],s.observing[1]],['核对中',s.limit]]:[[s.armed[2].split(' · ')[0],s.armed[0]],['等待触发',s.rule]]);
-  const rows=facts.map(([time,fact],i)=>`<div class="focus-observation-row"><time>${esc(time)}</time><span class="focus-timeline-node ${i===facts.length-1?'last':''}"></span><p>${esc(fact)}</p></div>`).join('');
-  const conclusion=p==='armed'||p==='observing'?'继续观察，尚未形成最终判断':p==='unknown'?'证据不足，保持待确认':p==='resolved'?'本次已由你确认，持续关注仍在运行':f[0];
-  const currentMark=p==='normal'?'normal':p==='attention'?'attention':p==='unknown'?'unknown':'idle';
-  const marks=['normal','normal','normal','normal','unknown','normal',currentMark].map((mark,i)=>`<span class="focus-history-day ${mark}" aria-label="${i===6?'本次':`第 ${i+1} 次`}：${mark==='normal'?'正常':mark==='attention'?'需要关注':mark==='unknown'?'无法确认':'观察中'}"><span>${mark==='normal'?icon('check',13):mark==='attention'?icon('alert',13):mark==='unknown'?'?':'·'}</span><small>${i===6?'本次':String(i+1).padStart(2,'0')}</small></span>`).join('');
-  const spec=noticeSpec(s.id,p);
-  const route=spec?`L${spec.level} · ${ATTENTION_DELIVERY[spec.level]}`:'尚未触发提醒';
-  const preview=`<div class="focus-preview"><img src="${image(s.photo)}" alt="${esc(shownZone)}示意画面"><div><strong>${esc(shownZone)}</strong><small>公开图片仅用于演示界面，不是设备证据</small></div><button data-action="view-frame" aria-label="查看观察区域">${icon('chevron',17)}</button></div>`;
-  const action=isPending(p)?`<section class="glass-card focus-section focus-next ${meta.kind}"><div class="focus-section-title"><span class="mini-icon orange">${icon('spark')}</span><h2>现在可以做什么</h2></div><p>${esc(p==='unknown'?'查看当前画面；若仍被遮挡，等待下一次复核。':s.action)}</p><div class="button-row"><button class="primary-button" data-action="view-frame">${icon('eye')} 查看画面</button><button class="secondary-button" data-action="resolve">确认并处理</button></div></section>`:'';
-  const related=recent.length?recent.map(n=>{
-    const media=n.type==='memory'?`<img class="focus-related-thumb" src="${image(s.photo)}" alt="Buddy 回忆预览">`:`<span class="focus-related-icon ${n.type}">${noticeIcon(n)}</span>`;
-    return `<button class="focus-related-row" data-notice="${n.id}">${media}<span><strong>${esc(n.title)}</strong><small>${esc(n.time)} · ${esc(NOTICE_TYPES[n.type].name)}${n.handled?' · 已处理':''}</small></span>${icon('chevron',16)}</button>`;
-  }).join(''):`<div class="focus-related-empty"><span class="mini-icon green">${icon('checkCircle')}</span><span>${isPending(p)?'本次变化留在首页，尚未发送主动通知。':'最近没有需要处理的相关通知。'}<br><small>${esc(f[2])}</small></span></div>`;
-  return `<div class="focus-detail ${meta.kind}"><section class="focus-hero ${p}"><div class="focus-hero-icon">${icon(s.icon,28)}</div><span class="focus-eyebrow">持续关注 · ${esc(s.group)}</span><h1>${esc(meta.title)}</h1><div class="focus-status ${p}">${icon(p==='attention'?'alert':p==='unknown'?'info':p==='normal'?'checkCircle':'clock',25)}<strong>${esc(status)}</strong></div><p>${esc(f[1])}</p><div class="focus-hero-meta"><span>${icon('clock',13)} ${esc(s.schedule)}</span><span>${icon('camera',13)} ${esc(s.source)}</span></div></section><div class="focus-why"><span>为什么关注</span><p>${esc(s.understand)}</p></div><section class="glass-card focus-section"><div class="focus-section-title"><span class="mini-icon">${icon('eye')}</span><h2>AI 观察</h2><small>可核对的事实</small></div><div class="focus-observation">${rows}</div><div class="focus-verdict"><span>${icon('spark',16)} 本次判断</span><strong>${esc(conclusion)}</strong></div>${meta.kind==='security'?preview:''}</section>${meta.kind==='security'||meta.kind==='routine'?action:''}<section class="glass-card focus-section focus-trend"><div class="focus-section-title"><span class="mini-icon green">${icon('activity')}</span><h2>状态趋势</h2><small>模拟历史</small></div><div class="focus-trend-caption"><strong>${esc(meta.trend.window)}</strong><span>近期观察节奏</span></div><div class="focus-history">${marks}</div><div class="focus-trend-stats"><div><small>${esc(meta.trend.label)}</small><strong>${esc(meta.trend.value)}</strong></div><div><small>本次观察</small><strong>${esc(f[2].split(' · ')[0])}</strong></div></div><p class="focus-trend-note">${esc(meta.trend.note)}</p></section><section class="glass-card focus-section"><div class="focus-section-title"><span class="mini-icon purple">${icon(s.id==='petdamage'?'spark':'clock')}</span><h2>相关记录</h2><small>最新变化</small></div>${related}</section>${meta.kind==='care'?action:''}<section class="glass-card focus-section"><div class="focus-section-title"><span class="mini-icon">${icon('shield')}</span><h2>判断边界</h2></div><p class="focus-reason">${esc(s.rule)}</p><div class="focus-limit">${icon('info',16)} <span>${esc(s.limit)}</span></div>${meta.kind!=='security'?preview:''}</section><section class="glass-card focus-section focus-settings"><div class="focus-section-title"><span class="mini-icon purple">${icon('settings')}</span><h2>关注设置</h2></div><div class="focus-setting-row"><span>关注对象</span><strong>${esc(s.object)}</strong></div><div class="focus-setting-row"><span>关注事项</span><strong>${esc(meta.title)}</strong></div><div class="focus-setting-row"><span>提醒方式</span><strong>${state.focusPrefs[s.id]==='exception'?'仅异常提醒':'智能提醒'}</strong></div><div class="focus-setting-row"><span>当前触达</span><strong>${esc(route)}</strong></div><div class="focus-setting-row"><span>判断方式</span><strong>AI 自动 · 证据不足则待确认</strong></div><button class="focus-manage-button" data-action="manage-focus">${icon('chat',17)} 用 Agent 调整关注 ${icon('chevron',15)}</button></section></div>`;
-}
+function noticeDetailPage(){return renderNoticeEventPage();}
+function detailPage(){return renderFocusDetailPage();}
 function detailHeader(title,ic,t=''){return `<h2><span class="mini-icon ${t}">${icon(ic)}</span>${title}</h2>`;}
 function modalHtml(){if(!state.modal)return '';const s=scene();const view=state.modal==='frame';return `<div class="modal-backdrop" data-action="close-modal"><div class="modal ${view?'frame-modal':''}" role="dialog" aria-modal="true"><h2>${view?'观察区域预览':'调整关注'}</h2>${view?`<img src="${image(s.photo)}" alt="${esc(s.object)}画面预览"><p>这是公开图片构成的界面预览。真实接入后，此处显示用户授权的设备画面。</p>`:`<p>当前关注：${esc(s.name)}。可以重新确认摄像头与观察区域，提醒将按新规则继续。</p>`}<button class="primary-button full" data-action="close-modal">完成</button></div></div>`;}
 function bannerHtml(){
@@ -269,10 +249,15 @@ function submitManage(text){
     const exception=/异常|不正常|有问题|需要关注/.test(text)&&/只|仅|才|不要|别|不再/.test(text);
     const smart=/恢复|智能|默认|原来|正常提醒/.test(text);
     let reply;
-    if(exception){state.focusPrefs[id]='exception';reply='已改为仅异常提醒。正常完成仍会更新首页；需要关注或无法确认时，我会按原注意力等级告诉你。';}
+    if(id==='moments'){
+      if(/特别|只在|仅/.test(text)){state.focusPrefs[id]='special';reply='已改为仅在发现特别瞬间时通知。日常回忆仍会留在 Buddy 的发现任务里。';}
+      else if(/每天|10|恢复|默认/.test(text)){delete state.focusPrefs[id];reply='已恢复每天 10:00 的回忆邀请；没有可靠内容时不会打扰你。';}
+      else reply='我还不能可靠地理解这个反馈调整。你可以说「每天10点给我回忆」或「只在特别瞬间通知我」。';
+    }
+    else if(exception){state.focusPrefs[id]='exception';reply='已改为仅异常提醒。正常完成仍会更新首页；需要关注或无法确认时，我会按原注意力等级告诉你。';}
     else if(smart){delete state.focusPrefs[id];reply='已恢复智能提醒。我会按这件事原先约定的方式报告状态变化。';}
     else reply='我还不能可靠地把这句话转成提醒调整。你可以说「只在异常时提醒我」或「恢复智能提醒」。';
-    state.manageMessages.push({role:'assistant',text:reply,done:exception||smart});state.manageBusy=false;
+    state.manageMessages.push({role:'assistant',text:reply,done:id==='moments'?/特别|只在|仅|每天|10|恢复|默认/.test(text):exception||smart});state.manageBusy=false;
     if(state.page==='agent'&&state.agentMode==='manage')render({scroll:'bottom'});
   },2200);
 }
@@ -310,7 +295,7 @@ function advancePhase(p){
 }
 function triggerShowcase(type){
   if(type==='memory'){
-    state.created.add(MEMORY_DIGEST.sceneId);
+    state.created.add(MEMORY_DIGEST.sceneId);state.phaseById[MEMORY_DIGEST.sceneId]='normal';
     state.sceneId=MEMORY_DIGEST.sceneId;state.objectTab=objectForScene(state.sceneId).id;
     recordNotice(MEMORY_DIGEST);navigate('home',{keepBanner:true});return;
   }
@@ -319,6 +304,15 @@ function triggerShowcase(type){
   state.created.add(item.sceneId);advancePhase('attention');
 }
 function matchScene(text){const lower=text.toLowerCase();const ranked=SCENARIOS.map(s=>({s,score:s.keywords.reduce((n,k)=>n+(lower.includes(k.toLowerCase())?k.length:0),0)})).sort((a,b)=>b.score-a.score);return ranked[0]?.score?ranked[0].s:null;}
+async function shareMemory(){
+  const n=activeNotice();if(!n)return;
+  const item={title:n.title,text:n.description||n.body,url:'https://yushengw0702-prog.github.io/home-pulse-vision-demo/'};
+  try {
+    if(navigator.share)await navigator.share(item);
+    else if(navigator.clipboard){await navigator.clipboard.writeText(`${item.title}\n${item.text}\n${item.url}`);flash('已复制回忆描述与 Demo 链接');}
+    else flash('当前浏览器暂不支持分享');
+  } catch(error){if(error?.name!=='AbortError')flash('分享暂未完成，请稍后重试');}
+}
 
 document.addEventListener('change',event=>{
   if(event.target.id==='console-scene')selectScene(event.target.value);
@@ -360,7 +354,10 @@ document.addEventListener('click',event=>{
     case 'view-frame':state.modal='frame';render();break;
     case 'guard-on':state.guardEnabled=true;flash('已开启本次事件的警戒演示');break;
     case 'save-memory':if(state.savedMemories.has(state.activeNoticeId))state.savedMemories.delete(state.activeNoticeId);else state.savedMemories.add(state.activeNoticeId);render();break;
+    case 'share-memory':shareMemory();break;
     case 'open-related-detail':state.returnPage='notice-detail';navigate('detail');break;
+    case 'confirm-status':{const n=activeNotice();if(n){n.handled=true;if(['attention','unknown'].includes(n.phase))state.phaseById[n.sceneId]='resolved';flash('已记录你的确认，持续关注仍会继续');}break;}
+    case 'continue-observing':{const n=activeNotice();if(n){n.handled=true;state.phaseById[n.sceneId]='observing';flash('已继续观察，这次提醒已收起');}break;}
     case 'resolve-notice':{const n=activeNotice();if(n){n.handled=true;if(['attention','unknown'].includes(n.phase))state.phaseById[n.sceneId]='resolved';flash('已记录你的处理，关注仍会继续');}break;}
     case 'close-modal':state.modal='';render();break;
     case 'resolve':state.phaseById[state.sceneId]='resolved';state.notices.filter(n=>n.sceneId===state.sceneId).forEach(n=>n.handled=true);flash('已记录你的处理，关注仍会继续');break;

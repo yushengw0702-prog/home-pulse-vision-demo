@@ -16,7 +16,7 @@ const ATTENTION_DELIVERY = {
 const NOTICE_POLICIES = {
   parcel: {
     normal:{type:'routine',level:0},
-    attention:{type:'alert',level:3,title:'门口包裹可能被拿走',body:'包裹离开原位置，已附变化前后的画面。',why:'位置变化经过前后画面复核；优先提醒你确认门口。'},
+    attention:{type:'alert',level:3,title:'门口包裹可能被拿走',body:'包裹离开原位置，建议查看门口。',why:'位置变化经过前后画面复核；优先提醒你确认门口。'},
     unknown:{type:'insight',level:2,title:'门口包裹暂时看不清',body:'门口区域被遮挡，无法判断包裹是否仍在。'},
   },
   away: {
@@ -25,8 +25,8 @@ const NOTICE_POLICIES = {
     unknown:{type:'routine',level:2,title:'离家门窗还有一处待确认',body:'大门已反锁，阳台窗未被画面完整覆盖。'},
   },
   petdamage: {
-    normal:{type:'memory',level:1},
-    attention:{type:'insight',level:3,title:'Buddy 在客厅持续咬扯沙发',body:'连续画面显示破坏行为，建议尽快查看。'},
+    normal:{type:'insight',level:1},
+    attention:{type:'insight',level:3,title:'Buddy 在客厅持续咬扯沙发',body:'连续画面显示破坏行为，建议尽快查看。',why:'连续画面显示咬扯动作，而不是仅仅靠近沙发，因此升级提醒。'},
     unknown:{type:'insight',level:1},
   },
   child: {
@@ -61,19 +61,24 @@ const NOTICE_POLICIES = {
   },
   turtle: {
     normal:{type:'insight',level:0},
-    attention:{type:'insight',level:3,title:'乌龟越过鱼缸边缘',body:'本轮快照显示乌龟在警戒线外侧，请尽快查看。'},
+    attention:{type:'insight',level:3,title:'乌龟越过鱼缸边缘',body:'本轮快照显示乌龟在警戒线外侧，请尽快查看。',why:'本轮定时快照显示目标位于警戒线外侧；低频观察需要你及时核对。'},
     unknown:{type:'insight',level:2,title:'这一轮看不清乌龟',body:'鱼缸反光或遮挡，下轮会继续复核。'},
+  },
+  moments: {
+    normal:{type:'memory',level:2,title:'Buddy 的生活回忆已生成',body:'最近 24 小时发现 3 个值得回看的瞬间。',why:'从清晰、非重复的片段中挑选互动与温馨时刻。',description:'Buddy 在沙发上安静休息，也留下了几个值得回看的小瞬间。'},
+    attention:{type:'memory',level:2,title:'发现 Buddy 一个特别的瞬间',body:'一段有趣的玩耍片段，想邀请你看看。',why:'这个玩耍动作符合你想发现有趣瞬间的偏好。',description:'Buddy 抱着心爱的小玩具，玩得很投入。'},
+    unknown:{type:'memory',level:1,title:'今天暂无可靠回忆',body:'画面不清晰，今天没有生成内容。'},
   },
 };
 const MEMORY_DIGEST = {
-  sceneId:'petdamage',phase:'normal',type:'memory',level:2,
-  title:'Buddy 今日回忆已生成',body:'发现 3 个值得回看的客厅瞬间。',time:'20:00',
-  why:'白天的普通活动只留在家庭记录里；晚间汇成一条回忆邀请。',
-  description:'今天午后，Buddy 在客厅安静地休息，也留下了几个温柔的瞬间。',
+  sceneId:'moments',phase:'normal',type:'memory',level:2,
+  title:'Buddy 的生活回忆已生成',body:'最近 24 小时发现 3 个值得回看的客厅瞬间。',time:'10:00',
+  why:'从清晰、非重复的片段里，挑出符合你偏好的温馨时刻。',
+  description:'Buddy 在沙发上安静休息，也留下了几个值得回看的小瞬间。',
 };
 const NOTICE_SHOWCASES = [
   {type:'alert',sceneId:'parcel',label:'安全 · 门口包裹被移动'},
   {type:'insight',sceneId:'meal',label:'照护 · Buddy 午餐延迟'},
-  {type:'memory',sceneId:'petdamage',label:'回忆 · Buddy 今日瞬间'},
+  {type:'memory',sceneId:'moments',label:'回忆 · Buddy 精彩瞬间'},
   {type:'routine',sceneId:'briefcase',label:'日常 · 出门公文包提醒'},
 ];
