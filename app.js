@@ -62,7 +62,8 @@ const state = {
   page:'home', sceneId:'meal', objectTab:'buddy', phaseById:{meal:'normal',petdamage:'normal',parcel:'normal',basket:'normal',child:'normal',rain:'normal'}, created:new Set(['meal','petdamage','parcel','basket','child','rain']),
   returnPage:'home', agentStep:0, agentBusy:null, agentPrompt:'', agentSource:'best',
   zoneEdit:false, zoneX:35, zoneY:27, agentSuggestion:false, modal:'', toast:'',
-  notices:[], navScroll:0, agentMode:'create', chatMessages:[], chatBusy:false,
+  notices:[], bannerNoticeId:null, activeNoticeId:null, savedMemories:new Set(), guardEnabled:false,
+  navScroll:0, agentMode:'create', chatMessages:[], chatBusy:false,
 };
 const scene = () => SCENE_MAP[state.sceneId];
 const phase = (id=state.sceneId) => state.phaseById[id] || 'draft';
@@ -71,23 +72,33 @@ const image = name => asset(name);
 const tone = (s=scene(),p=phase()) => p==='attention' ? (s.priority==='urgent'?'security':'care') : p==='unknown'?'unknown':'normal';
 const badgeClass = p => p==='attention'?'orange':p==='unknown'?'gray':p==='normal'||p==='resolved'?'green':'';
 const isPending = p => p==='attention'||p==='unknown';
-let busyTimer, toastTimer;
+let busyTimer, toastTimer, bannerTimer;
+function noticeSpec(id,p){
+  const s=SCENE_MAP[id], policy=NOTICE_POLICIES[id]?.[p];
+  if(!s||!policy)return null;
+  return {sceneId:id,phase:p,type:policy.type,level:policy.level,title:policy.title||s[p][0],body:policy.body||s[p][1],time:s[p][2].split(' · ')[0],why:policy.why||s.ground,baseline:policy.baseline||'',description:policy.description||'',action:s.action};
+}
+function activeNotice(){return state.notices.find(n=>n.id===state.activeNoticeId)||null;}
+function noticeIcon(n){return icon(NOTICE_TYPES[n.type]?.icon||'bell',17);}
 
 function statusBar(){return `<div class="status-bar"><span>9:41</span><span class="status-icons">${icon('bars')}${icon('wifi')}<span class="battery"></span></span></div>`;}
 function appBar(){
-  const title={home:'Home Pulse',attention:'我的关注',agent:'Home Pulse AI',notifications:'通知',detail:scene().name}[state.page];
-  const sub={attention:'值得留意的家与人',agent:state.agentMode==='chat'?'聊聊家里现在怎么样':'把关心变成持续观察',notifications:'按意义触达',detail:'判断依据与下一步'}[state.page];
+  const title={home:'Home Pulse',attention:'我的关注',agent:'Home Pulse AI',notifications:'通知',detail:scene().name,'notice-detail':activeNotice()?.type==='memory'?'今日回忆':activeNotice()?.type==='alert'?'安全事件':'状态详情'}[state.page];
+  const sub={attention:'值得留意的家与人',agent:state.agentMode==='chat'?'聊聊家里现在怎么样':'把关心变成持续观察',notifications:'按意义触达',detail:'判断依据与下一步','notice-detail':'AI 判断与下一步'}[state.page];
   return `<header class="app-bar"><button class="round-button" ${state.page==='home'?'data-page="attention" aria-label="我的关注"':'data-action="back" aria-label="返回"'}>${icon(state.page==='home'?'heart':'back')}</button><div class="app-bar-title">${esc(title)}${sub?`<small>${esc(sub)}</small>`:''}</div><button class="round-button ${state.notices.length?'alert-dot':''}" data-page="notifications" aria-label="查看通知">${icon('bell')}</button></header>`;
 }
-function footer(){return `<nav class="phone-footer" aria-label="主导航"><button class="nav-button ${state.page==='home'?'active':''}" data-page="home">${icon('home')}<span>首页</span></button><button class="nav-button ${state.page==='attention'?'active':''}" data-page="attention">${icon('heart')}<span>关注</span></button><button class="nav-button ${state.page==='agent'?'active':''}" data-page="agent">${icon('chat')}<span>Agent</span></button><button class="nav-button ${state.page==='notifications'?'active':''}" data-page="notifications">${icon('bell')}<span>通知</span></button></nav>`;}
+function footer(){return `<nav class="phone-footer" aria-label="主导航"><button class="nav-button ${state.page==='home'?'active':''}" data-page="home">${icon('home')}<span>首页</span></button><button class="nav-button ${state.page==='attention'?'active':''}" data-page="attention">${icon('heart')}<span>关注</span></button><button class="nav-button ${state.page==='agent'?'active':''}" data-page="agent">${icon('chat')}<span>Agent</span></button><button class="nav-button ${state.page==='notifications'||state.page==='notice-detail'?'active':''}" data-page="notifications">${icon('bell')}<span>通知</span></button></nav>`;}
 function sidePanels(){
   const links=[['home','01','家庭状态','一眼知道家里怎么样'],['attention','02','我的关注','10 个场景均可建立关注'],['agent','03','Home Pulse Agent','理解、选设备、确认区域'],['notifications','04','通知与处理','按状态分配注意力']].map(([key,no,title,sub])=>`<button class="stage-link ${state.page===key?'active':''}" data-page="${key}"><span class="num">${no}</span><span><strong>${title}</strong><small>${sub}</small></span>${icon('chevron')}</button>`).join('');
   const s=scene(),p=phase();
   const options=SCENARIOS.map(x=>`<option value="${x.id}" ${x.id===s.id?'selected':''}>${x.no} · ${x.name}</option>`).join('');
   const controls=PHASES.slice(1).map(key=>`<button class="control-phase ${p===key?'active':''}" data-console-phase="${key}" ${!state.created.has(s.id)?'disabled':''}><span class="phase-light ${key}"></span>${PHASE_LABEL[key]}</button>`).join('');
-  return `<aside class="stage-aside left"><div class="eyebrow">HOME PULSE · PRODUCT STORY</div><h1 class="stage-title">让家里的状态，<br>一眼就懂。</h1><p class="stage-description">从一句关心出发，经过可观察性确认，再用合适的方式把变化告诉你。</p><div class="step-list">${links}</div></aside><aside class="stage-aside right operator-console" aria-label="演示操作台"><div class="side-card"><div class="side-label"><span class="spark">✦</span> 场景操作台 · App 外</div><label class="console-label" for="console-scene">选择需求</label><select id="console-scene" class="console-select">${options}</select><p class="console-prompt">“${esc(s.prompt)}”</p><div class="console-actions"><button class="console-main" data-action="console-create">走完整创建链路</button><button class="console-secondary" data-action="console-seed">直接载入已创建</button></div><div class="console-divider"></div><label class="console-label">推进这个关注的状态</label><div class="phase-grid">${controls}</div><p class="console-status">当前：${esc(PHASE_LABEL[p])} · ${state.created.has(s.id)?'关注已创建':'请先创建关注'}</p><div class="console-actions"><button class="console-secondary" data-action="console-home">查看 App 首页</button><button class="console-secondary" data-action="console-reset">重置此场景</button></div></div><div class="side-footnote">操作台只负责推进故事时间。App 内的页面、通知、判断依据和处理动作会随之变化。公开照片仅用于界面预览，不代表真实设备取证。</div></aside>`;
+  const spec=noticeSpec(s.id,p);
+  const route=s.id==='petdamage'&&p==='normal'?'<strong>普通活动 L1 · 晚间回忆 L2</strong><span>首页静默更新 · 晚间一条邀请</span>':spec?`<strong>${esc(NOTICE_TYPES[spec.type].name)} · L${spec.level}</strong><span>${esc(ATTENTION_DELIVERY[spec.level])}</span>`:'<strong>观察中</strong><span>尚未形成提醒结论</span>';
+  const showcase=NOTICE_SHOWCASES.map(item=>`<button class="showcase-button ${item.type}" data-console-showcase="${item.type}"><span class="showcase-icon">${icon(NOTICE_TYPES[item.type].icon,16)}</span><span>${esc(item.label)}</span>${icon('chevron',14)}</button>`).join('');
+  return `<aside class="stage-aside left"><div class="eyebrow">HOME PULSE · PRODUCT STORY</div><h1 class="stage-title">让家里的状态，<br>一眼就懂。</h1><p class="stage-description">从一句关心出发，经过可观察性确认，再用合适的方式把变化告诉你。</p><div class="step-list">${links}</div></aside><aside class="stage-aside right operator-console" aria-label="演示操作台"><div class="side-card"><div class="side-label"><span class="spark">✦</span> 场景操作台 · App 外</div><label class="console-label" for="console-scene">选择需求</label><select id="console-scene" class="console-select">${options}</select><p class="console-prompt">“${esc(s.prompt)}”</p><div class="console-actions"><button class="console-main" data-action="console-create">走完整创建链路</button><button class="console-secondary" data-action="console-seed">直接载入已创建</button></div><div class="console-divider"></div><label class="console-label">推进这个关注的状态</label><div class="phase-grid">${controls}</div><p class="console-status">当前：${esc(PHASE_LABEL[p])} · ${state.created.has(s.id)?'关注已创建':'请先创建关注'}</p><div class="console-route">${route}</div><div class="console-actions"><button class="console-secondary" data-action="console-home">查看 App 首页</button><button class="console-secondary" data-action="console-reset">重置此场景</button></div><div class="console-divider"></div><label class="console-label">一键演示四种通知</label><div class="showcase-list">${showcase}</div><p class="console-status">选择上方任一状态，也会按该对象的类型和注意力等级决定是否出现横幅。</p></div><div class="side-footnote">操作台只负责推进故事时间。App 内的页面、通知、判断依据和处理动作会随之变化。公开照片仅用于界面预览，不代表真实设备取证。</div></aside>`;
 }
-function homeMood(){const active=SCENARIOS.filter(s=>state.created.has(s.id));return active.some(s=>phase(s.id)==='attention'&&s.priority==='urgent')?'security':active.some(s=>phase(s.id)==='attention')?'care':active.some(s=>phase(s.id)==='unknown')?'unknown':'normal';}
+function homeMood(){const active=SCENARIOS.filter(s=>state.created.has(s.id));return active.some(s=>phase(s.id)==='attention'&&noticeSpec(s.id,'attention')?.type==='alert')?'security':active.some(s=>phase(s.id)==='attention')?'care':active.some(s=>phase(s.id)==='unknown')?'unknown':'normal';}
 function mascot(){const mood=homeMood();return `<div class="mascot ${mood}" aria-hidden="true"><div class="face"><span class="eye left"></span><span class="eye right"></span><span class="mouth"></span></div></div>`;}
 function attentionCount(){return SCENARIOS.filter(s=>isPending(phase(s.id))).length;}
 function activeCount(){return state.created.size;}
@@ -159,8 +170,18 @@ function agentChatPage(){
 }
 function noticesPage(){
   const cards=state.notices.slice().reverse();
-  const quiet=SCENARIOS.filter(s=>state.created.has(s.id)&&phase(s.id)==='normal'&&!s.normalPush);
-  return `<div class="page-heading"><div class="eyebrow">NOTIFICATIONS</div><h1>值得打扰时，才打扰你</h1><p>安全风险即时触达；关怀温和提醒；平静状态留在首页。</p></div>${cards.length?`<div class="notice-stack">${cards.map(n=>`<button class="notification ${n.kind==='urgent'?'urgent':n.kind==='unknown'?'uncertain':n.kind==='success'?'success':''} ${n.handled?'handled':''}" data-notice="${n.id}"><div class="notice-top"><span class="notice-app-icon">${icon(SCENE_MAP[n.sceneId].icon)}</span><span>HOME PULSE · ${n.handled?'已处理':n.kind==='urgent'?'安全':n.kind==='unknown'?'待确认':n.kind==='success'?'报平安':'关怀'}</span><time>${esc(n.time)}</time></div><div class="notice-body"><div><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p></div><img src="${image(SCENE_MAP[n.sceneId].photo)}" alt="${esc(SCENE_MAP[n.sceneId].object)}预览"></div></button>`).join('')}</div>`:'<div class="glass-card blank-card">暂时没有需要打扰你的事。家庭状态会在首页持续更新。</div>'}<div class="section-heading"><div><h2>静默更新</h2><p>日常状态不占用你的注意力</p></div></div>${quiet.map(s=>`<button class="quiet-row" data-open-scene="${s.id}"><span class="mini-icon green">${icon('checkCircle')}</span><span><strong>${esc(s.normal[0])}</strong><small>${esc(s.normal[2])} · 未发送推送</small></span>${icon('chevron')}</button>`).join('')||'<p class="micro">当前没有已确认的静默状态。</p>'}`;
+  const quiet=SCENARIOS.filter(s=>state.created.has(s.id)&&['normal','unknown'].includes(phase(s.id))&&(noticeSpec(s.id,phase(s.id))?.level??0)<2);
+  const rows=cards.map(n=>`<button class="notification ${n.type} ${n.handled?'handled':''}" data-notice="${n.id}"><div class="notice-top"><span class="notice-app-icon">${noticeIcon(n)}</span><span>HOME PULSE · ${esc(NOTICE_TYPES[n.type].short)}${n.handled?' · 已处理':''}</span><time>${esc(n.time)}</time></div><div class="notice-body"><div><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p></div><img src="${image(SCENE_MAP[n.sceneId].photo)}" alt="${esc(SCENE_MAP[n.sceneId].object)}预览"></div></button>`).join('');
+  return `<div class="page-heading"><div class="eyebrow">HOME PULSE · 通知</div><h1>值得打扰时，才打扰你</h1><p>安全、照护、回忆和日常行动，各用合适的语气告诉你。</p></div>${cards.length?`<div class="notice-stack">${rows}</div>`:'<div class="glass-card blank-card">目前没有主动通知。家庭状态仍在首页持续更新。</div>'}<div class="section-heading"><div><h2>留在家里的更新</h2><p>低注意力变化只更新状态，不弹出横幅</p></div></div>${quiet.map(s=>`<button class="quiet-row" data-open-scene="${s.id}"><span class="mini-icon green">${icon('checkCircle')}</span><span><strong>${esc(phaseInfo(s,phase(s.id))[0])}</strong><small>${esc(PHASE_LABEL[phase(s.id)])} · 未发送通知</small></span>${icon('chevron')}</button>`).join('')||'<p class="micro">当前没有静默更新。</p>'}`;
+}
+function noticeDetailPage(){
+  const n=activeNotice();if(!n)return '<div class="glass-card blank-card">这条通知暂时无法打开。</div>';
+  const s=SCENE_MAP[n.sceneId], type=NOTICE_TYPES[n.type];
+  const head=`<div class="notice-detail-head ${n.type}"><span class="notice-detail-icon">${noticeIcon(n)}</span><span class="notice-detail-type">${esc(type.name)} · ${esc(n.time)}</span><h1>${esc(n.title)}</h1><p>${esc(n.body)}</p></div>`;
+  if(n.type==='memory')return `${head}<div class="memory-hero notice-memory-photo"><img src="${image(s.photo)}" alt="Buddy 在客厅的回忆画面"><div class="memory-overlay"><small>今日 · Buddy</small><h1>三个值得回看的瞬间</h1></div></div><div class="glass-card notice-detail-section"><h2>今天的故事</h2><p>${esc(n.description)}</p><div class="notice-action-row"><button class="primary-button" data-action="save-memory">${icon('heart')} ${state.savedMemories.has(n.id)?'已收藏':'收藏回忆'}</button><button class="secondary-button" data-action="open-related-detail">查看关注记录</button></div></div><div class="notice-explanation">${icon('spark')} ${esc(n.why)}</div>`;
+  if(n.type==='alert')return `${head}<div class="glass-card notice-detail-section"><div class="notice-risk"><span>${icon('alert')} 需要关注</span><strong>${n.level===4?'立即处理':'高优先级'}</strong></div><h2>AI 发现了什么</h2><div class="notice-timeline"><div><time>01</time><span>${esc(s.evidence[0])}</span></div><div><time>02</time><span>${esc(s.evidence[1])}</span></div><div><time>03</time><span>${esc(s.evidence[3])}</span></div></div></div><div class="glass-card notice-detail-section"><h2>关键画面</h2><div class="evidence-frame"><img src="${image(s.photo)}" alt="${esc(s.object)}画面示意"><span class="camera-label">${esc(s.zone)} · 演示画面</span></div><p>${esc(n.why)}</p></div><div class="glass-card notice-detail-section"><h2>建议你现在</h2><p>${esc(n.action)}</p><div class="notice-action-row"><button class="primary-button" data-action="view-frame">查看实时画面</button><button class="secondary-button" data-action="guard-on">${state.guardEnabled?'已开启警戒':'开启警戒'}</button></div><button class="notice-text-button" data-action="resolve-notice">确认已处理</button></div>`;
+  if(n.type==='insight')return `${head}<div class="glass-card notice-detail-section"><h2>${esc(s.object)} · 当前状态</h2><div class="insight-current">${icon('clock')}<strong>${esc(PHASE_LABEL[n.phase])}</strong><span>${esc(n.body)}</span></div>${n.baseline?`<div class="insight-baseline"><small>日常节奏</small><strong>${esc(n.baseline)}</strong></div>`:''}<div class="insight-baseline"><small>判断依据</small><strong>${esc(n.why)}</strong></div></div><div class="glass-card notice-detail-section"><h2>可以怎么做</h2><p>${esc(n.action)}</p><div class="notice-action-row"><button class="primary-button" data-action="view-frame">查看相关画面</button><button class="secondary-button" data-action="resolve-notice">确认并处理</button></div></div>`;
+  return `${head}<div class="glass-card notice-detail-section"><h2>现在的情况</h2><div class="routine-photo"><img src="${image(s.photo)}" alt="${esc(s.object)}区域预览"><span>${esc(s.zone)}</span></div><p>${esc(n.why)}</p></div><div class="glass-card notice-detail-section"><h2>建议行动</h2><p>${esc(n.action)}</p><div class="notice-action-row"><button class="primary-button" data-action="resolve-notice">${n.handled?'已确认':'确认已处理'}</button><button class="secondary-button" data-action="view-frame">查看画面</button></div></div>`;
 }
 function detailPage(){
   const s=scene(),p=phase(),f=phaseInfo();
@@ -172,10 +193,14 @@ function detailPage(){
 }
 function detailHeader(title,ic,t=''){return `<h2><span class="mini-icon ${t}">${icon(ic)}</span>${title}</h2>`;}
 function modalHtml(){if(!state.modal)return '';const s=scene();const view=state.modal==='frame';return `<div class="modal-backdrop" data-action="close-modal"><div class="modal ${view?'frame-modal':''}" role="dialog" aria-modal="true"><h2>${view?'观察区域预览':'调整关注'}</h2>${view?`<img src="${image(s.photo)}" alt="${esc(s.object)}画面预览"><p>这是公开图片构成的界面预览。真实接入后，此处显示用户授权的设备画面。</p>`:`<p>当前关注：${esc(s.name)}。可以重新确认摄像头与观察区域，提醒将按新规则继续。</p>`}<button class="primary-button full" data-action="close-modal">完成</button></div></div>`;}
+function bannerHtml(){
+  const n=state.notices.find(item=>item.id===state.bannerNoticeId);if(!n)return '';
+  return `<div class="ios-banner ${n.type}" role="alert" aria-label="Home Pulse 通知横幅"><div class="ios-banner-main" data-banner-open="${n.id}" role="button" tabindex="0"><div class="ios-banner-top"><span class="ios-banner-icon">${noticeIcon(n)}</span><strong>HOME PULSE</strong><time>现在</time></div><strong class="ios-banner-title">${esc(n.title)}</strong><p>${esc(n.body)}</p>${n.type==='memory'?`<img src="${image(SCENE_MAP[n.sceneId].photo)}" alt="Buddy 回忆缩略图">`:''}</div><button class="ios-banner-close" data-action="dismiss-banner" aria-label="关闭通知横幅">×</button></div>`;
+}
 function render(opts={}){
   const root=document.getElementById('app');const old=document.getElementById('phone-scroll')?.scrollTop||0;
-  const pages={home:homePage,attention:attentionPage,agent:agentPage,notifications:noticesPage,detail:detailPage};
-  root.innerHTML=`<main class="workspace">${sidePanels()}<div class="phone-wrap"><div class="phone">${statusBar()}${appBar()}<div class="content-scroll" id="phone-scroll">${pages[state.page]()}</div>${state.page==='home'?`<div class="home-float-actions"><button class="float-action" data-action="open-agent-create" aria-label="创建新关注" title="创建新关注">${icon('plus',25)}</button><button class="float-action" data-action="open-agent-chat" aria-label="与 Home Pulse 对话" title="与 Home Pulse 对话">${icon('chat',23)}</button></div>`:''}${footer()}<div class="home-indicator"></div>${state.toast?`<div class="toast">${icon('checkCircle')} ${esc(state.toast)}</div>`:''}${modalHtml()}</div></div></main>`;
+  const pages={home:homePage,attention:attentionPage,agent:agentPage,notifications:noticesPage,detail:detailPage,'notice-detail':noticeDetailPage};
+  root.innerHTML=`<main class="workspace">${sidePanels()}<div class="phone-wrap"><div class="phone">${statusBar()}${appBar()}<div class="content-scroll" id="phone-scroll">${pages[state.page]()}</div>${state.page==='home'?`<div class="home-float-actions"><button class="float-action" data-action="open-agent-create" aria-label="创建新关注" title="创建新关注">${icon('plus',25)}</button><button class="float-action" data-action="open-agent-chat" aria-label="与 Home Pulse 对话" title="与 Home Pulse 对话">${icon('chat',23)}</button></div>`:''}${footer()}<div class="home-indicator"></div>${state.toast?`<div class="toast">${icon('checkCircle')} ${esc(state.toast)}</div>`:''}${bannerHtml()}${modalHtml()}</div></div></main>`;
   const sc=document.getElementById('phone-scroll');sc.scrollTop=opts.scroll==='top'?0:opts.scroll==='bottom'?sc.scrollHeight:old;
 }
 function navigate(page){state.page=page;state.modal='';render({scroll:'top'});if(window.innerWidth<=760)window.scrollTo(0,0);}
@@ -202,15 +227,31 @@ function startBusy(next){
     render({scroll:'bottom'});
   },delay);
 }
+function recordNotice(spec){
+  if(!spec||spec.level<2)return null;
+  const n={...spec,id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),handled:false};
+  state.notices.push(n);state.notices=state.notices.slice(-30);state.bannerNoticeId=n.id;
+  clearTimeout(bannerTimer);
+  bannerTimer=setTimeout(()=>{if(state.bannerNoticeId===n.id){state.bannerNoticeId=null;render();}},10000);
+  return n;
+}
 function advancePhase(p){
   const s=scene();if(!state.created.has(s.id))return;
   state.phaseById[s.id]=p;
-  if(p==='resolved')state.notices.filter(n=>n.sceneId===s.id).forEach(n=>n.handled=true);
-  if(p==='attention'||p==='unknown'||(p==='normal'&&s.normalPush)){
-    const f=s[p];state.notices.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),sceneId:s.id,phase:p,kind:p==='normal'?'success':p==='unknown'?'unknown':s.priority==='urgent'?'urgent':'care',title:f[0],body:f[1],time:f[2].split(' · ')[0]});
-    state.notices=state.notices.slice(-20);
-  }
+  if(p==='normal'||p==='resolved')state.notices.filter(n=>n.sceneId===s.id).forEach(n=>n.handled=true);
+  state.bannerNoticeId=null;clearTimeout(bannerTimer);
+  recordNotice(noticeSpec(s.id,p));
   navigate('home');
+}
+function triggerShowcase(type){
+  if(type==='memory'){
+    state.created.add(MEMORY_DIGEST.sceneId);
+    state.sceneId=MEMORY_DIGEST.sceneId;state.objectTab=objectForScene(state.sceneId).id;
+    recordNotice(MEMORY_DIGEST);navigate('home');return;
+  }
+  const item=NOTICE_SHOWCASES.find(x=>x.type===type);if(!item)return;
+  state.sceneId=item.sceneId;state.objectTab=objectForScene(item.sceneId).id;
+  state.created.add(item.sceneId);advancePhase('attention');
 }
 function matchScene(text){const lower=text.toLowerCase();const ranked=SCENARIOS.map(s=>({s,score:s.keywords.reduce((n,k)=>n+(lower.includes(k.toLowerCase())?k.length:0),0)})).sort((a,b)=>b.score-a.score);return ranked[0]?.score?ranked[0].s:null;}
 
@@ -219,18 +260,21 @@ document.addEventListener('change',event=>{
 });
 document.addEventListener('click',event=>{
   if(event.target.classList.contains('modal-backdrop')){state.modal='';render();return;}
+  const showcase=event.target.closest('[data-console-showcase]');if(showcase){triggerShowcase(showcase.dataset.consoleShowcase);return;}
   const phaseControl=event.target.closest('[data-console-phase]');if(phaseControl){advancePhase(phaseControl.dataset.consolePhase);return;}
+  const banner=event.target.closest('[data-banner-open]');if(banner){const n=state.notices.find(x=>x.id===banner.dataset.bannerOpen);if(n){state.activeNoticeId=n.id;state.sceneId=n.sceneId;state.bannerNoticeId=null;clearTimeout(bannerTimer);navigate('notice-detail');}return;}
   const objectTab=event.target.closest('[data-object-tab]');if(objectTab){const object=OBJECTS.find(x=>x.id===objectTab.dataset.objectTab);if(object){state.objectTab=object.id;state.sceneId=object.scenes.find(id=>state.created.has(id))||object.scenes[0];render();}return;}
   const item=event.target.closest('[data-open-scene]');if(item){state.sceneId=item.dataset.openScene;state.returnPage=state.page;navigate('detail');return;}
   const chatDetail=event.target.closest('[data-chat-detail]');if(chatDetail){state.sceneId=chatDetail.dataset.chatDetail;state.returnPage='agent';navigate('detail');return;}
   const chatSuggest=event.target.closest('[data-chat-suggest]');if(chatSuggest){askChat(chatSuggest.dataset.chatSuggest);return;}
   const create=event.target.closest('[data-create]');if(create){startAgent(create.dataset.create);return;}
-  const notice=event.target.closest('[data-notice]');if(notice){const n=state.notices.find(x=>x.id===notice.dataset.notice);if(n){state.sceneId=n.sceneId;state.phaseById[n.sceneId]=n.handled?'resolved':n.phase;state.returnPage='notifications';navigate('detail');}return;}
+  const notice=event.target.closest('[data-notice]');if(notice){const n=state.notices.find(x=>x.id===notice.dataset.notice);if(n){state.activeNoticeId=n.id;state.sceneId=n.sceneId;state.bannerNoticeId=null;clearTimeout(bannerTimer);navigate('notice-detail');}return;}
   const source=event.target.closest('[data-source]');if(source){state.agentSource=source.dataset.source;render();return;}
   const page=event.target.closest('[data-page]');if(page){if(page.dataset.page==='agent')state.agentMode='create';navigate(page.dataset.page);return;}
   const action=event.target.closest('[data-action]');if(!action)return;event.preventDefault();
   switch(action.dataset.action){
-    case 'back':navigate(state.page==='detail'?state.returnPage:'home');break;
+    case 'back':navigate(state.page==='detail'?state.returnPage:state.page==='notice-detail'?'notifications':'home');break;
+    case 'dismiss-banner':state.bannerNoticeId=null;clearTimeout(bannerTimer);render();break;
     case 'open-agent-create':openAgent('create');break;
     case 'open-agent-chat':openAgent('chat');break;
     case 'console-create':startAgent(state.sceneId);break;
@@ -244,9 +288,16 @@ document.addEventListener('click',event=>{
     case 'adjust-zone':state.zoneEdit=!state.zoneEdit;render();break;
     case 'position-zone':if(state.zoneEdit){const rect=action.getBoundingClientRect();state.zoneX=Math.max(4,Math.min(58,(event.clientX-rect.left)/rect.width*100-17));state.zoneY=Math.max(10,Math.min(60,(event.clientY-rect.top)/rect.height*100-18));render();}break;
     case 'view-frame':state.modal='frame';render();break;
+    case 'guard-on':state.guardEnabled=true;flash('已开启本次事件的警戒演示');break;
+    case 'save-memory':if(state.savedMemories.has(state.activeNoticeId))state.savedMemories.delete(state.activeNoticeId);else state.savedMemories.add(state.activeNoticeId);render();break;
+    case 'open-related-detail':state.returnPage='notice-detail';navigate('detail');break;
+    case 'resolve-notice':{const n=activeNotice();if(n){n.handled=true;if(['attention','unknown'].includes(n.phase))state.phaseById[n.sceneId]='resolved';flash('已记录你的处理，关注仍会继续');}break;}
     case 'close-modal':state.modal='';render();break;
     case 'resolve':state.phaseById[state.sceneId]='resolved';state.notices.filter(n=>n.sceneId===state.sceneId).forEach(n=>n.handled=true);flash('已记录你的处理，关注仍会继续');break;
   }
+});
+document.addEventListener('keydown',event=>{
+  if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-banner-open]')){event.preventDefault();event.target.click();}
 });
 document.addEventListener('submit',event=>{
   if(event.target.id==='chat-form'){event.preventDefault();const value=event.target.querySelector('input').value.trim();if(value)askChat(value);return;}
