@@ -226,7 +226,12 @@ function noticesPage(){
 function noticeDetailPage(){return renderNoticeEventPage();}
 function detailPage(){return renderFocusDetailPage();}
 function detailHeader(title,ic,t=''){return `<h2><span class="mini-icon ${t}">${icon(ic)}</span>${title}</h2>`;}
-function modalHtml(){if(!state.modal)return '';const s=scene();const view=state.modal==='frame';return `<div class="modal-backdrop" data-action="close-modal"><div class="modal ${view?'frame-modal':''}" role="dialog" aria-modal="true"><h2>${view?'观察区域预览':'调整关注'}</h2>${view?`<img src="${image(s.photo)}" alt="${esc(s.object)}画面预览"><p>这是公开图片构成的界面预览。真实接入后，此处显示用户授权的设备画面。</p>`:`<p>当前关注：${esc(s.name)}。可以重新确认摄像头与观察区域，提醒将按新规则继续。</p>`}<button class="primary-button full" data-action="close-modal">完成</button></div></div>`;}
+function modalHtml(){
+  if(!state.modal)return '';
+  const s=scene(),view=state.modal==='frame',facts=(FOCUS_DETAILS[s.id]?.timeline[phase()]||FOCUS_DETAILS[s.id]?.timeline.normal||[]);
+  const frame=view?`<div class="frame-modal-image"><img src="${image(s.photo)}" alt="${esc(s.zone)}观察位置示意画面"><span>观察位置示意 · ${esc(s.zone)}</span></div><div class="frame-modal-timeline">${facts.map(([time,fact])=>`<div><time>${esc(time)}</time><span>${esc(fact)}</span></div>`).join('')}</div><p>画面为公开示意素材；关键节点为本 Demo 的模拟记录。真实设备接入后，可在此查看授权的截图或视频片段。</p>`:`<p>当前关注：${esc(s.name)}。可以重新确认摄像头与观察区域，提醒将按新规则继续。</p>`;
+  return `<div class="modal-backdrop" data-action="close-modal"><div class="modal ${view?'frame-modal':''}" role="dialog" aria-modal="true"><h2>${view?'观察画面与关键节点':'调整关注'}</h2>${frame}<button class="primary-button full" data-action="close-modal">完成</button></div></div>`;
+}
 function bannerHtml(){
   const n=state.notices.find(item=>item.id===state.bannerNoticeId);if(!n)return '';
   return `<div class="ios-banner ${n.type}" role="alert" aria-label="Home Pulse 通知横幅"><div class="ios-banner-main" data-banner-open="${n.id}" role="button" tabindex="0"><div class="ios-banner-top"><span class="ios-banner-icon">${noticeIcon(n)}</span><strong>HOME PULSE</strong><time>现在</time></div><strong class="ios-banner-title">${esc(n.title)}</strong><p>${esc(n.body)}</p>${n.type==='memory'?`<img src="${image(SCENE_MAP[n.sceneId].photo)}" alt="Buddy 回忆缩略图">`:''}</div><button class="ios-banner-close" data-action="dismiss-banner" aria-label="关闭通知横幅">×</button></div>`;

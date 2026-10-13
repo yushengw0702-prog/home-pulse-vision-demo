@@ -5,15 +5,18 @@ const WATCH_TYPE_NAME = {state:'状态守护',risk:'异常检测',discovery:'主
 function watchSection(title,iconName,body,extra=''){
   return `<section class="glass-card focus-section watch-section ${extra}"><div class="focus-section-title"><span class="mini-icon">${icon(iconName)}</span><h2>${esc(title)}</h2></div>${body}</section>`;
 }
+function watchOpenSection(title,body,extra=''){
+  return `<section class="watch-open ${extra}"><h2>${esc(title)}</h2>${body}</section>`;
+}
 function watchHero(s,p,meta){
   const f=phaseInfo(s,p),task=meta.watchType;
-  const lead=task==='risk'?'当前安全状态':'当前状态';
   const stamp=f[2]?.split(' · ')[0]||'持续观察中';
-  return `<section class="focus-hero watch-hero ${task} ${p}"><div class="focus-hero-icon">${icon(s.icon,28)}</div><span class="focus-eyebrow">${esc(WATCH_TYPE_NAME[task])} · ${esc(s.object)}</span><h1>${esc(meta.title)}</h1><small class="watch-hero-lead">${lead}</small><div class="focus-status ${p}">${icon(p==='attention'?'alert':p==='normal'?'checkCircle':'eye',24)}<strong>${esc(meta.status[p]||phaseLabel(s.id,p))}</strong></div><p>${esc(f[1])}</p><div class="focus-hero-meta"><span>${icon('clock',13)} 最近更新 ${esc(stamp)}</span><span>${icon('camera',13)} ${esc(s.source)}</span></div></section>`;
+  return `<section class="watch-metric-hero ${task} ${p}"><span class="watch-metric-eyebrow">${esc(WATCH_TYPE_NAME[task])} · ${esc(s.object)}</span><h1>${esc(meta.title)}</h1><div class="watch-metric-visual"><span class="watch-metric-ring">${icon(p==='attention'?'alert':p==='normal'?'checkCircle':'eye',43)}</span><strong>${esc(meta.status[p]||phaseLabel(s.id,p))}</strong><small>${task==='risk'?'当前安全状态':'当前状态'}</small></div><p>${esc(f[1])}</p><div class="watch-metric-meta"><span>${icon('clock',13)} 最近更新 ${esc(stamp)}</span><span>${icon('camera',13)} ${esc(s.source)}</span></div></section>`;
 }
-function watchPreview(s,caption){
+function watchEvidenceStage(s,p,meta){
   const zone=state.focusZones[s.id]?.label||s.zone;
-  return `<div class="watch-preview"><img src="${image(s.photo)}" alt="${esc(zone)}示意画面"><div><strong>${esc(zone)}</strong><small>${esc(caption)}</small></div></div><p class="watch-demo-note">公开图片仅示意观察范围；真实设备画面尚未接入。</p>`;
+  const facts=meta.timeline[p]||meta.timeline.normal||[];
+  return watchOpenSection('观察画面与判断依据',`<button class="watch-evidence-stage" data-action="view-frame" aria-label="查看${esc(s.object)}观察画面与关键节点"><img src="${image(s.photo)}" alt="${esc(zone)}示意画面"><span class="watch-evidence-top"><b>观察区域示意</b><span>${icon('image',13)} 关键画面</span></span><span class="watch-evidence-play">${icon('image',25)}</span><span class="watch-evidence-bottom"><strong>${esc(zone)}</strong><small>点按查看画面和关键观察节点 ${icon('chevron',13)}</small></span></button><p class="watch-demo-note">公开图片用于展示观察位置，不代表真实设备取证。</p><div class="watch-evidence-timeline">${facts.map(([time,fact],i)=>`<div class="${i===facts.length-1?'is-verdict':''}"><time>${esc(time)}</time><span></span><p>${esc(fact)}</p></div>`).join('')}</div><div class="watch-evidence-boundary"><strong>判断边界</strong><p>${esc(s.limit)}</p></div>`,'watch-evidence-section');
 }
 function watchBullet(label,text){
   return `<div class="watch-bullet"><span>${icon('check',13)}</span><p><strong>${esc(label)}</strong>${esc(text)}</p></div>`;
@@ -34,32 +37,30 @@ function watchRecent(s){
 }
 function watchStateDetail(s,p,meta){
   const history=['normal','normal','normal','normal','unknown','normal',p==='attention'?'attention':p==='unknown'?'unknown':'normal'];
-  const labels=history.map((mark,i)=>`<span class="focus-history-day ${mark}"><span>${mark==='normal'?icon('check',13):mark==='attention'?icon('alert',13):'?'}</span><small>${i===6?'本次':String(i+1).padStart(2,'0')}</small></span>`).join('');
+  const bars=history.map((mark,i)=>`<div class="watch-chart-day ${mark}"><span class="watch-chart-track"><i></i></span><b>${mark==='normal'?icon('check',12):mark==='attention'?icon('alert',12):'?'}</b><small>${i===6?'今天':String(i+1).padStart(2,'0')}</small></div>`).join('');
   const currentNotice=state.notices.filter(n=>n.sceneId===s.id&&n.phase===p).at(-1);
   const currentLink=currentNotice&&['attention','unknown'].includes(p)?`<button class="watch-current-link" data-notice="${currentNotice.id}">查看这次提醒的原因与处理 ${icon('chevron',14)}</button>`:'';
-  const observation=watchSection('AI 观察对象','eye',`${watchPreview(s,'我会在这里核对你关心的状态')}${watchBullet('观察区域',s.zone)}${watchBullet('核对线索',s.evidence[1])}<p class="watch-section-note">${esc(s.limit)}</p>`);
-  const model=watchSection('我会关注哪些结果','activity',`<div class="watch-state-model"><div class="normal">${icon('checkCircle',17)}<span><strong>预期已达成</strong><small>${esc(meta.status.normal)}</small></span></div><div class="attention">${icon('alert',17)}<span><strong>与预期有偏离</strong><small>${esc(meta.status.attention)}</small></span></div><div class="unknown">${icon('info',17)}<span><strong>证据还不够</strong><small>${esc(meta.status.unknown)}</small></span></div></div>`);
-  const trend=watchSection('历史状态趋势','activity',`<div class="focus-trend-caption"><strong>${esc(meta.trend.window)}</strong><span>模拟历史</span></div><div class="focus-history">${labels}</div><div class="focus-trend-stats"><div><small>${esc(meta.trend.label)}</small><strong>${esc(meta.trend.value)}</strong></div><div><small>本次更新</small><strong>${esc(phaseInfo(s,p)[2].split(' · ')[0])}</strong></div></div><p class="focus-trend-note">${esc(meta.trend.note)}</p>`);
-  const policy=watchSection('何时告诉你','bell',watchPolicy(s,[['normal','正常',s.normalRoute],['attention','偏离',s.alertRoute],['unknown','不确定',s.unknownRoute]]));
-  return `<div class="focus-detail watch-detail state">${watchHero(s,p,meta)}${currentLink}${observation}${model}${trend}${policy}${watchRecent(s)}${watchManage(s,'state')}</div>`;
+  const trend=watchOpenSection('最近的状态',`<div class="watch-trend-header"><strong>${esc(meta.trend.window)}</strong><span>模拟历史</span></div><div class="watch-trend-chart">${bars}</div><div class="watch-metric-pair"><div><small>${esc(meta.trend.label)}</small><strong>${esc(meta.trend.value)}</strong></div><div><small>本次更新</small><strong>${esc(phaseInfo(s,p)[2].split(' · ')[0])}</strong></div></div><p class="focus-trend-note">${esc(meta.trend.note)}</p>`);
+  const model=watchOpenSection('我会辨认三种结果',`<div class="watch-outcome-list"><div><span class="normal">${icon('checkCircle',17)}</span><strong>预期已达成</strong><small>${esc(meta.status.normal)}</small></div><div><span class="attention">${icon('alert',17)}</span><strong>与预期有偏离</strong><small>${esc(meta.status.attention)}</small></div><div><span class="unknown">${icon('info',17)}</span><strong>画面还不足以确认</strong><small>${esc(meta.status.unknown)}</small></div></div>`);
+  const policy=watchOpenSection('什么时候告诉你',watchPolicy(s,[['normal','正常',s.normalRoute],['attention','偏离',s.alertRoute],['unknown','不确定',s.unknownRoute]]));
+  return `<div class="focus-detail watch-detail state">${watchHero(s,p,meta)}${currentLink}${watchEvidenceStage(s,p,meta)}${trend}${model}${policy}${watchRecent(s)}${watchManage(s,'state')}</div>`;
 }
 function watchRiskDetail(s,p,meta){
   const stages=[['01','平时安全','常规活动留在记录'],['02','事件出现',meta.riskStages[0]],['03','继续核对',meta.riskStages[1]],['04','形成风险',meta.riskStages[2]]];
-  const guard=watchSection('守护范围','shield',`${watchPreview(s,'只关注这个区域内的风险行为')}${watchBullet('触发线索',s.trigger)}${watchBullet('风险条件',s.rule)}<p class="watch-section-note">${esc(s.limit)}</p>`);
-  const model=watchSection('风险如何形成','alert',`<div class="watch-risk-stages">${stages.map(([no,title,text])=>`<div><b>${no}</b><span><strong>${esc(title)}</strong><small>${esc(text)}</small></span></div>`).join('')}</div>`);
+  const model=watchOpenSection('风险如何形成',`<div class="watch-risk-stages">${stages.map(([no,title,text])=>`<div><b>${no}</b><span><strong>${esc(title)}</strong><small>${esc(text)}</small></span></div>`).join('')}</div><p class="watch-section-note">触发线索：${esc(s.trigger)}。${esc(s.rule)}</p>`);
   const h=meta.riskHistory;
-  const history=watchSection('安全记录','activity',`<div class="watch-history-head">${esc(h.window)} <small>模拟历史</small></div><div class="watch-risk-stats"><div><strong>${esc(h.quiet)}</strong><small>无异常</small></div><div><strong>${esc(h.events)}</strong><small>风险事件</small></div></div><p class="focus-trend-note">${esc(h.note)}</p>`);
-  const policy=watchSection('风险提醒策略','bell',watchPolicy(s,[['normal','普通活动',s.normalRoute],['attention','达到风险条件',s.alertRoute],['unknown','无法核实',s.unknownRoute]]));
-  return `<div class="focus-detail watch-detail risk">${watchHero(s,p,meta)}${guard}${model}${history}${policy}${watchRecent(s)}${watchManage(s,'risk')}</div>`;
+  const history=watchOpenSection('安全记录',`<div class="watch-history-head">${esc(h.window)} <small>模拟历史</small></div><div class="watch-risk-stats"><div><strong>${esc(h.quiet)}</strong><small>无异常</small></div><div><strong>${esc(h.events)}</strong><small>风险事件</small></div></div><p class="focus-trend-note">${esc(h.note)}</p>`);
+  const policy=watchOpenSection('风险提醒策略',watchPolicy(s,[['normal','普通活动',s.normalRoute],['attention','达到风险条件',s.alertRoute],['unknown','无法核实',s.unknownRoute]]));
+  return `<div class="focus-detail watch-detail risk">${watchHero(s,p,meta)}${watchEvidenceStage(s,p,meta)}${model}${history}${policy}${watchRecent(s)}${watchManage(s,'risk')}</div>`;
 }
 function watchDiscoveryDetail(s,p,meta){
   const count=p==='normal'||p==='attention'?3:0;
   const cards=count?meta.discoveries.map(item=>`<article class="watch-discovery-item"><img src="${image(item.photo)}" alt="${esc(item.title)}示意照片"><div><time>${esc(item.time)}</time><strong>${esc(item.title)}</strong><p>${esc(item.description)}</p></div></article>`).join(''):'<p class="watch-empty">最近 24 小时还没有可靠的内容。我会继续寻找，不会编造画面。</p>';
   const hero=`<section class="watch-discovery-hero"><img src="${image(s.photo)}" alt="Buddy 客厅活动示意照片"><div><small>主动发现 · Buddy</small><h1>${esc(meta.title)}</h1><strong>最近 24 小时发现 ${count} 个值得记录的时刻</strong><span>${esc(phaseLabel(s.id,p))} · ${esc(s.schedule)} 汇总</span></div></section>`;
-  const finds=watchSection('最近的发现','spark',`<div class="watch-discovery-list">${cards}</div><p class="watch-demo-note">图片与时刻为演示样本，不是真实家庭记录。</p>`);
-  const taste=watchSection('我在寻找什么','heart',`${watchBullet('有趣动作','值得回看的小表情与动作')}${watchBullet('互动瞬间','Buddy 与家人的自然互动')}${watchBullet('温馨时刻','安静休息、迎接回家等日常片段')}<p class="watch-section-note">${esc(s.limit)}</p>`);
-  const library=watchSection('历史收藏','image',`<div class="watch-library-stat"><strong>${esc(meta.trend.value)}</strong><span>${esc(meta.trend.window)} · 模拟历史</span></div><p class="watch-section-note">${esc(meta.trend.note)}</p>`);
-  const feedback=watchSection('回忆如何送达','bell',`<div class="focus-setting-row"><span>汇总时间</span><strong>${esc(s.schedule)}</strong></div><div class="focus-setting-row"><span>内容形式</span><strong>照片 + AI 描述</strong></div><div class="focus-setting-row"><span>没有可靠内容</span><strong>不生成、不打扰</strong></div>`);
+  const finds=watchOpenSection('最近的发现',`<div class="watch-discovery-list">${cards}</div><p class="watch-demo-note">图片与时刻为演示样本，不是真实家庭记录。</p>`);
+  const taste=watchOpenSection('我在寻找什么',`${watchBullet('有趣动作','值得回看的小表情与动作')}${watchBullet('互动瞬间','Buddy 与家人的自然互动')}${watchBullet('温馨时刻','安静休息、迎接回家等日常片段')}<p class="watch-section-note">${esc(s.limit)}</p>`);
+  const library=watchOpenSection('历史收藏',`<div class="watch-library-stat"><strong>${esc(meta.trend.value)}</strong><span>${esc(meta.trend.window)} · 模拟历史</span></div><p class="watch-section-note">${esc(meta.trend.note)}</p>`);
+  const feedback=watchOpenSection('回忆如何送达',`<div class="focus-setting-row"><span>汇总时间</span><strong>${esc(s.schedule)}</strong></div><div class="focus-setting-row"><span>内容形式</span><strong>照片 + AI 描述</strong></div><div class="focus-setting-row"><span>没有可靠内容</span><strong>不生成、不打扰</strong></div>`);
   return `<div class="focus-detail watch-detail discovery">${hero}${finds}${taste}${library}${feedback}${watchRecent(s)}${watchManage(s,'discovery')}</div>`;
 }
 function renderFocusDetailPage(){
