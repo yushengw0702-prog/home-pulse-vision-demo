@@ -1019,3 +1019,34 @@ img { display: block; max-width: 100%; }
 .frame-modal-timeline > div { display:grid; grid-template-columns:43px 1fr; gap:9px; padding:9px 0; border-bottom:1px solid #e1e9f5; }
 .frame-modal-timeline time { color:#5286d6; font-size:10px; font-weight:800; }
 .frame-modal-timeline span { color:#516b9b; font-size:10px; line-height:1.5; }
+
+/* A dedicated home entry for camera coverage and compact home hardware. */
+.devices-page { padding:8px 0 29px; }
+.device-page-intro { padding:9px 4px 2px; }
+.device-page-intro > span { color:#7d98cb; font-size:9px; font-weight:850; letter-spacing:.13em; }
+.device-page-intro h1 { margin:6px 0; color:#1b2e6b; font-size:27px; letter-spacing:-.05em; }
+.device-page-intro p { max-width:320px; margin:0; color:#8191b4; font-size:11px; line-height:1.6; }
+.device-count-strip { display:flex; align-items:center; gap:11px; margin:17px 0 22px; padding:12px 14px; border:1px solid #fff; border-radius:17px; color:#8191b3; background:rgba(255,255,255,.6); font-size:10px; font-weight:750; }
+.device-count-strip b { color:#4283e8; font-size:15px; }.device-count-strip i { width:3px; height:3px; border-radius:50%; background:#a8b9d9; }
+.device-section-heading { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin:0 2px 11px; }
+.device-section-heading h2 { margin:0; color:#20336e; font-size:17px; letter-spacing:-.03em; }.device-section-heading span { color:#9aa9c7; font-size:9px; }
+.device-preview { display:block; position:relative; width:100%; height:190px; overflow:hidden; padding:0; border:1px solid #fff; border-radius:23px; background:#cad8e8; box-shadow:0 14px 26px rgba(51,77,132,.13); text-align:left; }
+.device-preview::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg,rgba(15,29,61,.3),transparent 40%,rgba(11,30,66,.72)); pointer-events:none; }
+.device-preview img { width:100%; height:100%; object-fit:cover; }
+.device-preview-top,.device-preview-bottom { position:absolute; z-index:1; left:13px; right:13px; display:flex; align-items:center; gap:5px; color:#fff; }
+.device-preview-top { top:12px; font-size:10px; font-weight:800; }.device-preview-bottom { bottom:13px; justify-content:space-between; font-size:12px; font-weight:760; }
+.device-selected-summary { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:12px 2px 2px; }
+.device-selected-summary strong { display:block; font-size:15px; }.device-selected-summary small { display:block; margin-top:4px; color:#8e9dbb; font-size:9px; }
+.device-selected-summary > span { flex:none; padding:6px 8px; border-radius:99px; color:#8594af; background:#e8eef7; font-size:9px; font-weight:750; }
+.device-linked { margin-top:14px; padding:14px; border:1px solid #fff; border-radius:20px; background:rgba(255,255,255,.78); }
+.device-linked h3 { margin:0 0 7px; font-size:12px; }.device-focus-link { display:flex; align-items:center; gap:8px; width:100%; padding:9px 2px; border:0; border-top:1px solid #e8eef7; color:#38558d; background:transparent; text-align:left; }.device-focus-link > span { color:#538fec; }.device-focus-link strong { flex:1; font-size:10px; }.device-focus-link > .icon { color:#9dabca; }
+.device-empty { margin:0; color:#97a5bf; font-size:10px; line-height:1.5; }
+.device-list-section,.device-hardware { margin-top:29px; }
+.device-list { overflow:hidden; padding:0 12px; border:1px solid #fff; border-radius:20px; background:rgba(255,255,255,.77); }
+.device-list-row { display:flex; align-items:center; gap:9px; width:100%; min-height:67px; padding:9px 0; border:0; border-top:1px solid #e6edf8; color:#223976; background:transparent; text-align:left; }
+.device-list-row:first-child { border-top:0; }.device-list-row.active { color:#307de9; }
+.device-list-row img { width:51px; height:46px; flex:none; border-radius:11px; object-fit:cover; }.device-list-row > span { flex:1; min-width:0; }.device-list-row strong { display:block; font-size:11px; }.device-list-row small { display:block; margin-top:4px; color:#91a0be; font-size:9px; }.device-list-row em { color:#9baac4; font-size:9px; font-style:normal; }.device-list-row > .icon { color:#a6b2cc; }
+.hardware-item { display:flex; gap:11px; margin-top:9px; padding:15px; border:1px solid #fff; border-radius:20px; background:rgba(255,255,255,.79); }
+.hardware-icon { display:grid; place-items:center; width:43px; height:43px; flex:none; border-radius:15px; color:#5b87df; background:#e8f0ff; }.hardware-icon.mint { color:#28b991; background:#e1f7ef; }
+.hardware-item strong { display:block; margin-top:2px; font-size:12px; }.hardware-item small { display:block; margin-top:5px; color:#8091b4; font-size:10px; line-height:1.5; }.hardware-item em { display:block; margin-top:8px; color:#96a7c5; font-size:9px; font-style:normal; }
+.device-disclaimer { margin:12px 2px 0; color:#97a4c0; font-size:9px; line-height:1.65; }

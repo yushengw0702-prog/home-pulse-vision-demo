@@ -58,6 +58,13 @@ const OBJECTS = [
   {id:'balcony',name:'阳台',kind:'天气变化',icon:'yard',photo:'front-door-day.jpg',scenes:['rain']},
   {id:'aquarium',name:'鱼缸',kind:'水位观察',icon:'eye',photo:'front-door-day.jpg',scenes:['turtle']},
 ];
+const CAMERA_DEVICES = [
+  {id:'living',name:'客厅摄像头',place:'客厅 · Buddy 活动区',photo:'living-room.jpg',coverage:'饭盆、沙发与日常活动',scenes:['meal','petdamage','moments','cleaning']},
+  {id:'door',name:'门口摄像头',place:'门口 · 入户区域',photo:'front-door-day.jpg',coverage:'包裹、来访与进出门',scenes:['parcel','basket','away','child','briefcase']},
+  {id:'balcony',name:'阳台摄像头',place:'阳台 · 窗边区域',photo:'rain-window.jpg',coverage:'窗户、晾衣架与天气变化',scenes:['rain']},
+  {id:'indoor',name:'室内摄像头',place:'室内 · 鱼缸区域',photo:'turtle.jpg',coverage:'鱼缸边缘与低频快照',scenes:['turtle']},
+];
+const DEVICE_MAP=Object.fromEntries(CAMERA_DEVICES.map(device=>[device.id,device]));
 const objectForScene = id => OBJECTS.find(item=>item.scenes.includes(id)) || OBJECTS[0];
 const state = {
   page:'home', sceneId:'meal', objectTab:'buddy', phaseById:{meal:'normal',petdamage:'normal',moments:'normal',parcel:'normal',basket:'normal',child:'normal',rain:'normal'}, created:new Set(['meal','petdamage','moments','parcel','basket','child','rain']),
@@ -66,6 +73,7 @@ const state = {
   notices:[], bannerNoticeId:null, activeNoticeId:null, noticeReturnPage:'notifications', savedMemories:new Set(), guardEnabled:false,
   navScroll:0, agentMode:'create', chatMessages:[], chatBusy:false,
   focusPrefs:{}, focusZones:{}, manageSceneId:null, manageMessages:[], manageBusy:false, manageReturn:'detail',
+  deviceId:'living',
 };
 const scene = () => SCENE_MAP[state.sceneId];
 const phase = (id=state.sceneId) => state.phaseById[id] || 'draft';
@@ -92,9 +100,9 @@ function noticeIcon(n){return icon(NOTICE_TYPES[n.type]?.icon||'bell',17);}
 function statusBar(){return `<div class="status-bar"><span>9:41</span><span class="status-icons">${icon('bars')}${icon('wifi')}<span class="battery"></span></span></div>`;}
 function appBar(){
   const noticeTask=activeNotice()?FOCUS_DETAILS[activeNotice().sceneId]?.watchType:null;
-  const title={home:'Home Pulse',attention:'我的关注',agent:'Home Pulse AI',notifications:'通知',detail:'关注详情','notice-detail':noticeTask==='discovery'?'生活回忆':noticeTask==='risk'?'风险事件':'状态事件'}[state.page];
-  const sub={attention:'值得留意的家与人',agent:state.agentMode==='chat'?'聊聊家里现在怎么样':state.agentMode==='manage'?'调整一件持续关注':'把关心变成持续观察',notifications:'按意义触达',detail:'持续关注事项','notice-detail':'AI 判断与下一步'}[state.page];
-  return `<header class="app-bar"><button class="round-button" ${state.page==='home'?'data-page="attention" aria-label="我的关注"':'data-action="back" aria-label="返回"'}>${icon(state.page==='home'?'heart':'back')}</button><div class="app-bar-title">${esc(title)}${sub?`<small>${esc(sub)}</small>`:''}</div><button class="round-button ${state.notices.length?'alert-dot':''}" data-page="notifications" aria-label="查看通知">${icon('bell')}</button></header>`;
+  const title={home:'Home Pulse',devices:'设备管控',attention:'我的关注',agent:'Home Pulse AI',notifications:'通知',detail:'关注详情','notice-detail':noticeTask==='discovery'?'生活回忆':noticeTask==='risk'?'风险事件':'状态事件'}[state.page];
+  const sub={devices:'摄像头与小硬件',attention:'值得留意的家与人',agent:state.agentMode==='chat'?'聊聊家里现在怎么样':state.agentMode==='manage'?'调整一件持续关注':'把关心变成持续观察',notifications:'按意义触达',detail:'持续关注事项','notice-detail':'AI 判断与下一步'}[state.page];
+  return `<header class="app-bar"><button class="round-button" ${state.page==='home'?'data-page="devices" aria-label="摄像头与小硬件" title="摄像头与小硬件"':'data-action="back" aria-label="返回"'}>${icon(state.page==='home'?'camera':'back')}</button><div class="app-bar-title">${esc(title)}${sub?`<small>${esc(sub)}</small>`:''}</div><button class="round-button ${state.notices.length?'alert-dot':''}" data-page="notifications" aria-label="查看通知">${icon('bell')}</button></header>`;
 }
 function footer(){return `<nav class="phone-footer" aria-label="主导航"><button class="nav-button ${state.page==='home'?'active':''}" data-page="home">${icon('home')}<span>首页</span></button><button class="nav-button ${state.page==='attention'?'active':''}" data-page="attention">${icon('heart')}<span>关注</span></button><button class="nav-button ${state.page==='agent'?'active':''}" data-page="agent">${icon('chat')}<span>Agent</span></button><button class="nav-button ${state.page==='notifications'||state.page==='notice-detail'?'active':''}" data-page="notifications">${icon('bell')}<span>通知</span></button></nav>`;}
 function sidePanels(){
@@ -143,6 +151,13 @@ function homePage(){
     return `<section class="home-object-group" id="home-object-${item.id}" data-home-object="${item.id}"><div class="object-section-head"><img src="${image(item.photo)}" alt=""><span><strong>${esc(item.name)}</strong><small>${esc(item.kind)} · ${active.length} 项关注</small></span><em>${active.length?`${active.length} 项`:'待关注'}</em></div><div class="concern-list">${active.map(homeCard).join('')}${ideas}</div></section>`;
   }).join('');
   return `<div class="home-dashboard"><section class="hero home-hero"><div class="home-hero-eyebrow">HOME PULSE · 今日家庭状态</div><div class="mascot-space">${mascot()}</div><h1>${title}</h1><p>${esc(summary)}</p><div class="home-status-strip"><span><b>${stable}</b> 项状态稳定</span><i></i><span class="${pending?'has-attention':''}"><b>${pending}</b> 项需要留意</span></div><button class="attention-pill ${mood}" data-page="attention">查看全部关注 ${icon('chevron',14)}</button></section><div class="section-heading object-heading"><div><h2>我的关注</h2><p>选择对象，快速找到每一件关心的事</p></div></div><div class="object-tabs" aria-label="关注对象">${tabs}</div><div class="home-groups">${groups}</div></div>`;
+}
+function devicesPage(){
+  const selected=DEVICE_MAP[state.deviceId]||CAMERA_DEVICES[0];
+  const linked=selected.scenes.map(id=>SCENE_MAP[id]).filter(s=>s&&state.created.has(s.id));
+  const cameraRows=CAMERA_DEVICES.map(device=>`<button class="device-list-row ${selected.id===device.id?'active':''}" data-device-select="${device.id}" aria-pressed="${selected.id===device.id}"><img src="${image(device.photo)}" alt=""><span><strong>${esc(device.name)}</strong><small>${esc(device.place)}</small></span><em>${device.scenes.filter(id=>state.created.has(id)).length} 项关注</em>${icon('chevron',15)}</button>`).join('');
+  const focusRows=linked.length?linked.map(s=>`<button class="device-focus-link" data-open-scene="${s.id}"><span>${icon(s.icon,16)}</span><strong>${esc(s.name)}</strong>${icon('chevron',14)}</button>`).join(''):'<p class="device-empty">这台摄像头还没有关联已创建的关注事项。</p>';
+  return `<div class="devices-page"><div class="device-page-intro"><span>HOME PULSE · 家庭感知来源</span><h1>摄像头与小硬件</h1><p>在这里看清每台设备负责观察什么，以及哪些关注会用到它。</p></div><div class="device-count-strip"><span><b>4</b> 个摄像头位置</span><i></i><span><b>2</b> 类小硬件</span></div><section class="device-selected"><div class="device-section-heading"><h2>当前查看</h2><span>设备配置示意</span></div><button class="device-preview" data-action="device-preview" aria-label="查看${esc(selected.name)}画面示意"><img src="${image(selected.photo)}" alt="${esc(selected.name)}覆盖位置示意图"><span class="device-preview-top">${icon('camera',13)} ${esc(selected.name)} · 画面示意</span><span class="device-preview-bottom">${esc(selected.coverage)} ${icon('chevron',15)}</span></button><div class="device-selected-summary"><div><strong>${esc(selected.name)}</strong><small>${esc(selected.place)}</small></div><span>尚未接入真实设备</span></div><div class="device-linked"><h3>关联的持续关注</h3>${focusRows}</div></section><section class="device-list-section"><div class="device-section-heading"><h2>摄像头</h2><span>按位置查看</span></div><div class="device-list">${cameraRows}</div></section><section class="device-hardware"><div class="device-section-heading"><h2>小硬件</h2><span>提供事件信号</span></div><div class="hardware-item"><span class="hardware-icon">${icon('wifi',23)}</span><div><strong>Home Pulse Hub</strong><small>汇聚摄像头与传感器事件，供 Agent 建立状态判断。</small><em>接入方案示意</em></div></div><div class="hardware-item"><span class="hardware-icon mint">${icon('lock',23)}</span><div><strong>门磁传感器</strong><small>提供大门开启与闭合信号，辅助确认离家和到家状态。</small><em>关联：门窗确认 · 放学到家</em></div></div><p class="device-disclaimer">当前为产品演示配置。摄像头画面与设备状态不是实时数据，真实管控需接入官方 SDK 和授权设备。</p></section></div>`;
 }
 function attentionPage(){
   const active=SCENARIOS.filter(s=>state.created.has(s.id));
@@ -228,6 +243,10 @@ function detailPage(){return renderFocusDetailPage();}
 function detailHeader(title,ic,t=''){return `<h2><span class="mini-icon ${t}">${icon(ic)}</span>${title}</h2>`;}
 function modalHtml(){
   if(!state.modal)return '';
+  if(state.modal==='device-frame'){
+    const device=DEVICE_MAP[state.deviceId]||CAMERA_DEVICES[0];
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal frame-modal device-modal" role="dialog" aria-modal="true"><h2>${esc(device.name)}</h2><div class="frame-modal-image"><img src="${image(device.photo)}" alt="${esc(device.name)}位置示意"><span>${esc(device.place)} · 示意画面</span></div><p>观察范围：${esc(device.coverage)}。此图用于说明设备覆盖位置，不是实时画面；真实预览需要授权设备接入。</p><button class="primary-button full" data-action="close-modal">返回设备管控</button></div></div>`;
+  }
   const s=scene(),view=state.modal==='frame',facts=(FOCUS_DETAILS[s.id]?.timeline[phase()]||FOCUS_DETAILS[s.id]?.timeline.normal||[]);
   const frame=view?`<div class="frame-modal-image"><img src="${image(s.photo)}" alt="${esc(s.zone)}观察位置示意画面"><span>观察位置示意 · ${esc(s.zone)}</span></div><div class="frame-modal-timeline">${facts.map(([time,fact])=>`<div><time>${esc(time)}</time><span>${esc(fact)}</span></div>`).join('')}</div><p>画面为公开示意素材；关键节点为本 Demo 的模拟记录。真实设备接入后，可在此查看授权的截图或视频片段。</p>`:`<p>当前关注：${esc(s.name)}。可以重新确认摄像头与观察区域，提醒将按新规则继续。</p>`;
   return `<div class="modal-backdrop" data-action="close-modal"><div class="modal ${view?'frame-modal':''}" role="dialog" aria-modal="true"><h2>${view?'观察画面与关键节点':'调整关注'}</h2>${frame}<button class="primary-button full" data-action="close-modal">完成</button></div></div>`;
@@ -238,7 +257,7 @@ function bannerHtml(){
 }
 function render(opts={}){
   const root=document.getElementById('app');const old=document.getElementById('phone-scroll')?.scrollTop||0;
-  const pages={home:homePage,attention:attentionPage,agent:agentPage,notifications:noticesPage,detail:detailPage,'notice-detail':noticeDetailPage};
+  const pages={home:homePage,devices:devicesPage,attention:attentionPage,agent:agentPage,notifications:noticesPage,detail:detailPage,'notice-detail':noticeDetailPage};
   root.innerHTML=`<main class="workspace">${sidePanels()}<div class="phone-wrap"><div class="phone ${state.page==='home'?'home-screen':''}">${statusBar()}${appBar()}<div class="content-scroll" id="phone-scroll">${pages[state.page]()}</div>${state.page==='home'?`<div class="home-float-actions"><button class="float-action" data-action="open-agent-create" aria-label="创建新关注" title="创建新关注">${icon('plus',25)}</button><button class="float-action" data-action="open-agent-chat" aria-label="与 Home Pulse 对话" title="与 Home Pulse 对话">${icon('chat',23)}</button></div>`:''}${footer()}<div class="home-indicator"></div>${state.toast?`<div class="toast">${icon('checkCircle')} ${esc(state.toast)}</div>`:''}${bannerHtml()}${modalHtml()}</div></div></main>`;
   const sc=document.getElementById('phone-scroll');sc.scrollTop=opts.scroll==='top'?0:opts.scroll==='bottom'?sc.scrollHeight:old;
 }
@@ -342,6 +361,7 @@ document.addEventListener('click',event=>{
   const showcase=event.target.closest('[data-console-showcase]');if(showcase){triggerShowcase(showcase.dataset.consoleShowcase);return;}
   const phaseControl=event.target.closest('[data-console-phase]');if(phaseControl){advancePhase(phaseControl.dataset.consolePhase);return;}
   const banner=event.target.closest('[data-banner-open]');if(banner){const n=state.notices.find(x=>x.id===banner.dataset.bannerOpen);if(n){state.noticeReturnPage=state.page;state.activeNoticeId=n.id;state.sceneId=n.sceneId;state.bannerNoticeId=null;clearTimeout(bannerTimer);navigate('notice-detail');}return;}
+  const deviceSelect=event.target.closest('[data-device-select]');if(deviceSelect){if(DEVICE_MAP[deviceSelect.dataset.deviceSelect]){state.deviceId=deviceSelect.dataset.deviceSelect;render({scroll:'top'});}return;}
   const objectTab=event.target.closest('[data-object-tab]');if(objectTab){const object=OBJECTS.find(x=>x.id===objectTab.dataset.objectTab);if(object){state.objectTab=object.id;state.sceneId=object.scenes.find(id=>state.created.has(id))||object.scenes[0];document.querySelectorAll('.object-tab').forEach(tab=>{const selected=tab.dataset.objectTab===object.id;tab.classList.toggle('active',selected);tab.setAttribute('aria-pressed',String(selected));});scrollHomeObject(object.id);}return;}
   const item=event.target.closest('[data-open-scene]');if(item){state.sceneId=item.dataset.openScene;state.returnPage=state.page;navigate('detail');return;}
   const chatDetail=event.target.closest('[data-chat-detail]');if(chatDetail){state.sceneId=chatDetail.dataset.chatDetail;state.returnPage='agent';navigate('detail');return;}
@@ -372,6 +392,7 @@ document.addEventListener('click',event=>{
     case 'adjust-zone':state.zoneEdit=!state.zoneEdit;render();break;
     case 'position-zone':if(state.zoneEdit||state.agentAwaiting&&state.agentCustomArea){const rect=action.getBoundingClientRect();state.zoneX=Math.max(4,Math.min(58,(event.clientX-rect.left)/rect.width*100-17));state.zoneY=Math.max(10,Math.min(60,(event.clientY-rect.top)/rect.height*100-18));if(state.agentAwaiting)state.agentAreaMarked=true;render({scroll:'bottom'});}break;
     case 'view-frame':state.modal='frame';render();break;
+    case 'device-preview':state.modal='device-frame';render();break;
     case 'guard-on':state.guardEnabled=true;flash('已开启本次事件的警戒演示');break;
     case 'save-memory':if(state.savedMemories.has(state.activeNoticeId))state.savedMemories.delete(state.activeNoticeId);else state.savedMemories.add(state.activeNoticeId);render();break;
     case 'share-memory':shareMemory();break;
