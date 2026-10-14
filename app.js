@@ -73,7 +73,7 @@ const state = {
   notices:[], bannerNoticeId:null, activeNoticeId:null, noticeReturnPage:'notifications', savedMemories:new Set(), guardEnabled:false,
   navScroll:0, agentMode:'create', chatMessages:[], chatBusy:false,
   focusPrefs:{}, focusZones:{}, manageSceneId:null, manageMessages:[], manageBusy:false, manageReturn:'detail',
-  deviceId:'living',
+  deviceId:'living', homePreset:'auto',
 };
 const scene = () => SCENE_MAP[state.sceneId];
 const phase = (id=state.sceneId) => state.phaseById[id] || 'draft';
@@ -113,16 +113,13 @@ function sidePanels(){
   const spec=noticeSpec(s.id,p);
   const route=spec?`<strong>${esc(NOTICE_TYPES[spec.type].name)} · L${spec.level}</strong><span>${esc(ATTENTION_DELIVERY[spec.level])}</span>`:'<strong>观察中</strong><span>尚未形成提醒结论</span>';
   const showcase=NOTICE_SHOWCASES.map(item=>`<button class="showcase-button ${item.type}" data-console-showcase="${item.type}"><span class="showcase-icon">${icon(NOTICE_TYPES[item.type].icon,16)}</span><span>${esc(item.label)}</span>${icon('chevron',14)}</button>`).join('');
-  return `<aside class="stage-aside left"><div class="eyebrow">HOME PULSE · PRODUCT STORY</div><h1 class="stage-title">让家里的状态，<br>一眼就懂。</h1><p class="stage-description">从一句关心出发，经过可观察性确认，再用合适的方式把变化告诉你。</p><div class="step-list">${links}</div></aside><aside class="stage-aside right operator-console" aria-label="演示操作台"><div class="side-card"><div class="side-label"><span class="spark">✦</span> 场景操作台 · App 外</div><label class="console-label" for="console-scene">选择需求</label><select id="console-scene" class="console-select">${options}</select><p class="console-prompt">“${esc(s.prompt)}”</p><div class="console-actions"><button class="console-main" data-action="console-create">走完整创建链路</button><button class="console-secondary" data-action="console-seed">直接载入已创建</button></div><div class="console-divider"></div><label class="console-label">推进这个关注的状态</label><div class="phase-grid">${controls}</div><p class="console-status">当前：${esc(phaseLabel(s.id,p))} · ${state.created.has(s.id)?'关注已创建':'请先创建关注'}</p><div class="console-route">${route}</div><div class="console-actions"><button class="console-secondary" data-action="console-home">查看 App 首页</button><button class="console-secondary" data-action="console-reset">重置此场景</button></div><div class="console-divider"></div><label class="console-label">一键演示四种通知</label><div class="showcase-list">${showcase}</div><p class="console-status">选择上方任一状态，也会按该对象的类型和注意力等级决定是否出现横幅。</p></div><div class="side-footnote">操作台只负责推进故事时间。App 内的页面、通知、判断依据和处理动作会随之变化。公开照片仅用于界面预览，不代表真实设备取证。</div></aside>`;
+  const homeViews=[['calm','安心','当前无需处理'],['attention','留意','午餐偏离预期'],['risk','风险','包裹位置异常'],['unknown','待确认','到家证据不足'],['discovery','发现','特别瞬间']].map(([key,label,sub])=>`<button class="home-preview-button ${state.homePreset===key?'active':''}" data-home-preset="${key}" aria-pressed="${state.homePreset===key}"><strong>${label}</strong><small>${sub}</small></button>`).join('');
+  return `<aside class="stage-aside left"><div class="eyebrow">HOME PULSE · PRODUCT STORY</div><h1 class="stage-title">让家里的状态，<br>一眼就懂。</h1><p class="stage-description">从一句关心出发，经过可观察性确认，再用合适的方式把变化告诉你。</p><div class="step-list">${links}</div></aside><aside class="stage-aside right operator-console" aria-label="演示操作台"><div class="side-card"><div class="side-label"><span class="spark">✦</span> 场景操作台 · App 外</div><label class="console-label">首页状态简报</label><div class="home-preview-grid">${homeViews}</div><p class="console-status">切换后直接查看首页，关注详情也会使用相同的模拟状态。</p><div class="console-divider"></div><label class="console-label" for="console-scene">选择需求</label><select id="console-scene" class="console-select">${options}</select><p class="console-prompt">“${esc(s.prompt)}”</p><div class="console-actions"><button class="console-main" data-action="console-create">走完整创建链路</button><button class="console-secondary" data-action="console-seed">直接载入已创建</button></div><div class="console-divider"></div><label class="console-label">推进这个关注的状态</label><div class="phase-grid">${controls}</div><p class="console-status">当前：${esc(phaseLabel(s.id,p))} · ${state.created.has(s.id)?'关注已创建':'请先创建关注'}</p><div class="console-route">${route}</div><div class="console-actions"><button class="console-secondary" data-action="console-home">查看 App 首页</button><button class="console-secondary" data-action="console-reset">重置此场景</button></div><div class="console-divider"></div><label class="console-label">一键演示四种通知</label><div class="showcase-list">${showcase}</div><p class="console-status">选择上方任一状态，也会按该对象的类型和注意力等级决定是否出现横幅。</p></div><div class="side-footnote">操作台只负责推进故事时间。App 内的页面、通知、判断依据和处理动作会随之变化。公开照片仅用于界面预览，不代表真实设备取证。</div></aside>`;
 }
-function homeMood(){const active=SCENARIOS.filter(s=>state.created.has(s.id)&&s.id!=='moments');return active.some(s=>phase(s.id)==='attention'&&noticeSpec(s.id,'attention')?.type==='alert')?'security':active.some(s=>phase(s.id)==='attention')?'care':active.some(s=>phase(s.id)==='unknown')?'unknown':'normal';}
+function homeMood(){const active=SCENARIOS.filter(s=>state.created.has(s.id)&&s.id!=='moments');return active.some(s=>phase(s.id)==='attention'&&noticeSpec(s.id,'attention')?.type==='alert')?'security':active.some(s=>phase(s.id)==='attention')?'care':active.some(s=>phase(s.id)==='unknown')?'unknown':state.created.has('moments')&&phase('moments')==='attention'?'discovery':'normal';}
 function mascot(){const mood=homeMood();return `<div class="mascot ${mood}" aria-hidden="true"><div class="face"><span class="eye left"></span><span class="eye right"></span><span class="mouth"></span></div></div>`;}
 function attentionCount(){return SCENARIOS.filter(s=>isPending(phase(s.id),s.id)).length;}
 function activeCount(){return state.created.size;}
-function sceneCard(s, opts={}){
-  const p=phase(s.id), f=phaseInfo(s,p), selected=state.sceneId===s.id;
-  return `<button class="story-card glass-card ${selected?'selected':''}" data-open-scene="${s.id}"><span class="story-image"><img src="${image(s.photo)}" alt="${esc(s.object)}区域预览"><span class="story-icon">${icon(s.icon)}</span></span><span class="story-copy"><small>${s.no} · ${esc(s.group)}</small><strong>${esc(s.name)}</strong><em>${esc(f[0])}</em></span><span class="story-state ${p}">${esc(phaseLabel(s.id,p))}</span></button>`;
-}
 const HOME_CARD_TITLES={parcel:'包裹状态',away:'门窗状态',petdamage:'客厅活动',child:'放学到家',meal:'饮食状态',cleaning:'保洁状态',briefcase:'公文包',rain:'雨天阳台',basket:'零食篮位置',turtle:'乌龟越线',moments:'精彩瞬间'};
 const HOME_CARD_ICONS={petdamage:'activity',meal:'food',moments:'spark'};
 function homeCard(s){
@@ -133,12 +130,7 @@ function homeCard(s){
   const visual=isDiscovery?`<span class="home-card-thumbnails" aria-hidden="true">${task.discoveries.slice(0,3).map(item=>`<img src="${image(item.photo)}" alt="">`).join('')}</span>`:`<span class="home-card-bars" aria-hidden="true">${[36,56,43,76,60,92,68].map((height,i)=>`<i style="--bar-height:${height}%;--bar-delay:${i*28}ms"></i>`).join('')}</span>`;
   return `<button class="concern-card ${tone}" data-open-scene="${s.id}" aria-label="${esc(s.name)}，${esc(status)}，查看关注详情"><span class="home-card-top"><span class="concern-icon">${icon(HOME_CARD_ICONS[s.id]||s.icon,24)}</span><span class="home-card-chevron">${icon('chevron',15)}</span></span><span class="home-card-name">${esc(HOME_CARD_TITLES[s.id]||s.name)}</span><strong class="home-card-status">${esc(status)}</strong><span class="home-card-note">${esc(f[1])}</span><span class="home-card-foot"><small>${esc(f[2])}</small>${visual}</span></button>`;
 }
-function homePage(){
-  const pending=attentionCount();
-  const mood=homeMood();
-  const title=mood==='security'?'家里有安全事项需要处理':mood==='care'?`${pending} 项状态需要你关注`:mood==='unknown'?`${pending} 项状态还无法确认`:'今天家里很安心';
-  const summary=mood==='normal'?'你关注的人与事都在各自的节奏里。':`${pending} 项关注出现变化，点开对应事项查看依据。`;
-  const stable=SCENARIOS.filter(s=>state.created.has(s.id)&&['normal','resolved'].includes(phase(s.id))).length;
+function focusObjectSections(){
   const tabs=OBJECTS.map(item=>{
     const count=item.scenes.filter(id=>state.created.has(id)).length;
     const alert=item.scenes.some(id=>isPending(phase(id),id));
@@ -150,7 +142,32 @@ function homePage(){
     const ideas=remaining.map(s=>`<button class="home-create-card" data-create="${s.id}"><span>${icon('plus',22)}</span><strong>${esc(HOME_CARD_TITLES[s.id]||s.name)}</strong><small>创建新关注</small></button>`).join('');
     return `<section class="home-object-group" id="home-object-${item.id}" data-home-object="${item.id}"><div class="object-section-head"><img src="${image(item.photo)}" alt=""><span><strong>${esc(item.name)}</strong><small>${esc(item.kind)} · ${active.length} 项关注</small></span><em>${active.length?`${active.length} 项`:'待关注'}</em></div><div class="concern-list">${active.map(homeCard).join('')}${ideas}</div></section>`;
   }).join('');
-  return `<div class="home-dashboard"><section class="hero home-hero"><div class="home-hero-eyebrow">HOME PULSE · 今日家庭状态</div><div class="mascot-space">${mascot()}</div><h1>${title}</h1><p>${esc(summary)}</p><div class="home-status-strip"><span><b>${stable}</b> 项状态稳定</span><i></i><span class="${pending?'has-attention':''}"><b>${pending}</b> 项需要留意</span></div><button class="attention-pill ${mood}" data-page="attention">查看全部关注 ${icon('chevron',14)}</button></section><div class="section-heading object-heading"><div><h2>我的关注</h2><p>选择对象，快速找到每一件关心的事</p></div></div><div class="object-tabs" aria-label="关注对象">${tabs}</div><div class="home-groups">${groups}</div></div>`;
+  return `<div class="attention-objects"><div class="section-heading object-heading"><div><h2>关注对象</h2><p>选择对象，快速找到每一件关心的事</p></div></div><div class="object-tabs" aria-label="关注对象">${tabs}</div><div class="home-groups">${groups}</div></div>`;
+}
+function homePriorityItems(){
+  return SCENARIOS.filter(s=>state.created.has(s.id)&&s.id!=='moments'&&isPending(phase(s.id),s.id)).map(s=>{
+    const p=phase(s.id),security=p==='attention'&&noticeSpec(s.id,p)?.type==='alert';
+    return {scene:s,phase:p,kind:security?'security':p==='attention'?'care':'unknown',rank:security?0:p==='attention'?1:2};
+  }).sort((a,b)=>a.rank-b.rank);
+}
+function homePriorityCard(item){
+  const s=item.scene,f=phaseInfo(s,item.phase),label=item.kind==='security'?'需要处理':item.kind==='care'?'需要留意':'等待确认';
+  return `<button class="briefing-priority ${item.kind}" data-open-scene="${s.id}"><span class="briefing-priority-icon">${icon(item.kind==='security'?'shield':item.kind==='care'?'alert':'eye',22)}</span><span class="briefing-priority-copy"><small>${label} · ${esc(s.object)}</small><strong>${esc(f[0])}</strong><em>${esc(f[1])}</em><span>查看判断依据 ${icon('chevron',13)}</span></span></button>`;
+}
+function homeRecentItem(s){
+  const p=phase(s.id),f=phaseInfo(s,p),discovery=s.id==='moments';
+  const photo=discovery?FOCUS_DETAILS.moments.discoveries[0]?.photo||s.photo:s.photo;
+  return `<button class="briefing-recent-item" data-open-scene="${s.id}"><img src="${image(photo)}" alt="${esc(s.name)}示意画面"><span><small>${discovery?'值得回看':'状态已确认'} · ${esc(f[2].split(' · ')[0])}</small><strong>${discovery?'Buddy 的精彩瞬间':esc(s.name)}</strong><em>${discovery?(p==='attention'?'发现一个特别瞬间':'发现 3 个值得回看的片段'):esc(f[0])}</em></span>${icon('chevron',15)}</button>`;
+}
+function homePage(){
+  const items=homePriorityItems(),mood=homeMood(),urgent=items.filter(item=>item.kind==='security').length,care=items.filter(item=>item.kind==='care').length,unknown=items.filter(item=>item.kind==='unknown').length;
+  const stable=SCENARIOS.filter(s=>state.created.has(s.id)&&s.id!=='moments'&&['normal','resolved'].includes(phase(s.id))).length;
+  const observing=SCENARIOS.filter(s=>state.created.has(s.id)&&s.id!=='moments'&&['armed','observing'].includes(phase(s.id))).length;
+  const title=urgent?`${urgent} 项安全事项需要处理`:care?`${care} 项状态需要留意`:unknown?`${unknown} 项状态还未确认`:stable===0?observing?'正在了解家里的状态':'从一件关心的事开始':mood==='discovery'?'家里平稳，也有新发现':'家里目前平稳';
+  const summary=items.length?`${items[0].scene.name}：${phaseInfo(items[0].scene,items[0].phase)[0]}。点开可以查看判断依据。`:stable?'已确认的状态都在预期内，目前无需你处理。':observing?'关注已开始，但还没有足够证据形成家庭结论。':'告诉我你想关注的人与事，我会从这里开始了解你的家。';
+  const labels=[urgent?`<span class="urgent"><b>${urgent}</b> 项需要处理</span>`:'',care?`<span class="has-attention"><b>${care}</b> 项需要留意</span>`:'',unknown?`<span class="unknown"><b>${unknown}</b> 项待确认</span>`:'',`<span><b>${stable}</b> 项已确认</span>`,observing?`<span><b>${observing}</b> 项观察中</span>`:''].filter(Boolean).join('<i></i>');
+  const recent=['moments','child','meal'].map(id=>SCENE_MAP[id]).filter(s=>state.created.has(s.id)&&(s.id==='moments'?['normal','attention'].includes(phase(s.id)):phase(s.id)==='normal')).filter(s=>!items.some(item=>item.scene.id===s.id)).slice(0,2);
+  return `<div class="home-dashboard briefing-home"><section class="hero home-hero ${mood}"><div class="home-hero-eyebrow">HOME PULSE · 今日家庭简报</div><div class="mascot-space">${mascot()}</div><h1>${esc(title)}</h1><p>${esc(summary)}</p><div class="home-status-strip">${labels}</div></section><section class="briefing-now"><div class="briefing-section-head"><span>01 / 此刻与你有关</span><h2>${items.length?'先看这些变化':stable?'现在无需你处理':'等待家庭状态形成'}</h2><p>${items.length?'按需要介入的程度排列，最多展示两件。':stable?'我会继续观察，状态变化时再告诉你。':'建立关注后，我会在有足够证据时更新这里。'}</p></div>${items.length?`<div class="briefing-priority-list">${items.slice(0,2).map(homePriorityCard).join('')}</div>`:`<div class="briefing-calm-line">${icon(stable?'checkCircle':'clock',19)}<span>${stable?`${stable} 项状态已确认${observing?`，${observing} 项仍在观察`:''}`:observing?`${observing} 项关注正在观察，还没有形成结论`:'还没有可以判断的家庭状态'}</span></div>`}${items.length>2?`<button class="briefing-more" data-page="attention">还有 ${items.length-2} 项变化 · 查看全部关注 ${icon('chevron',14)}</button>`:''}</section>${recent.length?`<section class="briefing-recent"><div class="briefing-section-head"><span>02 / 家庭近况</span><h2>今天发生了什么</h2><p>日常变化和精彩瞬间，留给你慢慢看。</p></div><div class="briefing-recent-list">${recent.map(homeRecentItem).join('')}</div></section>`:''}<button class="briefing-all" data-page="attention"><span>${icon('heart',18)} 查看全部持续关注</span>${icon('chevron',16)}</button></div>`;
 }
 function devicesPage(){
   const selected=DEVICE_MAP[state.deviceId]||CAMERA_DEVICES[0];
@@ -162,7 +179,7 @@ function devicesPage(){
 function attentionPage(){
   const active=SCENARIOS.filter(s=>state.created.has(s.id));
   const remaining=SCENARIOS.filter(s=>!state.created.has(s.id));
-  return `<div class="page-heading"><div class="eyebrow">THINGS THAT MATTER</div><h1>每件关心，都有回应</h1><p>关注是有对象、有范围、有判断边界的持续任务。</p></div><div class="attention-summary glass-card"><div><strong>${active.length}</strong><span>持续关注</span></div><div><strong>${attentionCount()}</strong><span>需要留意</span></div><div><strong>${SCENARIOS.length}</strong><span>可创建场景</span></div></div><div class="section-heading"><div><h2>正在关注</h2><p>点开可查看状态依据</p></div></div>${active.map(s=>sceneCard(s)).join('')||'<div class="glass-card blank-card">还没有关注。选择下面的一件事开始。</div>'}<div class="section-heading"><div><h2>你还可以关注</h2><p>从真实生活中的一句话开始</p></div></div>${remaining.map(s=>`<button class="idea-card" data-create="${s.id}"><span class="mini-icon">${icon(s.icon)}</span><span><strong>${esc(s.name)}</strong><small>“${esc(s.prompt)}”</small></span>${icon('plus')}</button>`).join('')}`;
+  return `<div class="focus-index"><div class="page-heading"><div class="eyebrow">THINGS THAT MATTER</div><h1>每件关心，都有回应</h1><p>关注是有对象、有范围、有判断边界的持续任务。</p></div><div class="attention-summary glass-card"><div><strong>${active.length}</strong><span>持续关注</span></div><div><strong>${attentionCount()}</strong><span>需要查看</span></div><div><strong>${remaining.length}</strong><span>还可创建</span></div></div>${focusObjectSections()}</div>`;
 }
 function agentRow(body){return `<div class="agent-row"><div class="agent-mini">✦</div><div class="glass-card agent-card">${body}</div></div>`;}
 function agentManagePage(){
@@ -262,15 +279,15 @@ function render(opts={}){
   const sc=document.getElementById('phone-scroll');sc.scrollTop=opts.scroll==='top'?0:opts.scroll==='bottom'?sc.scrollHeight:old;
 }
 function navigate(page,opts={}){if(!opts.keepBanner){state.bannerNoticeId=null;clearTimeout(bannerTimer);}state.page=page;state.modal='';render({scroll:'top'});if(window.innerWidth<=760)window.scrollTo(0,0);}
-function scrollHomeObject(id,smooth=true){
+function scrollFocusObject(id,smooth=true){
   const sc=document.getElementById('phone-scroll'),target=document.getElementById(`home-object-${id}`);
-  if(!sc||!target||state.page!=='home')return;
+  if(!sc||!target||state.page!=='attention')return;
   const top=target.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop-72;
   sc.scrollTo({top:Math.max(0,top),behavior:smooth?'smooth':'auto'});
 }
 function flash(message){clearTimeout(toastTimer);state.toast=message;render();toastTimer=setTimeout(()=>{state.toast='';render();},2600);}
 function selectScene(id,show='home'){
-  if(!SCENE_MAP[id])return;clearTimeout(busyTimer);state.agentRunId++;state.agentBusy=null;state.sceneId=id;state.objectTab=objectForScene(id).id;state.agentStep=0;state.agentPrompt='';state.agentSource='best';state.agentAwaiting=false;state.agentChoice=null;state.agentCustomArea=false;state.agentAreaMarked=false;state.agentAdjust=false;state.zoneEdit=false;state.zoneX=35;state.zoneY=27;navigate(show);if(show==='home')scrollHomeObject(state.objectTab,false);
+  if(!SCENE_MAP[id])return;clearTimeout(busyTimer);state.agentRunId++;state.agentBusy=null;state.sceneId=id;state.objectTab=objectForScene(id).id;state.agentStep=0;state.agentPrompt='';state.agentSource='best';state.agentAwaiting=false;state.agentChoice=null;state.agentCustomArea=false;state.agentAreaMarked=false;state.agentAdjust=false;state.zoneEdit=false;state.zoneX=35;state.zoneY=27;navigate(show);if(show==='attention')scrollFocusObject(state.objectTab,false);
 }
 function startAgent(id,prompt){
   state.agentMode='create';selectScene(id,'agent');state.agentPrompt=prompt||SCENE_MAP[id].prompt;startBusy(1);
@@ -326,21 +343,30 @@ function recordNotice(spec){
 }
 function advancePhase(p){
   const s=scene();if(!state.created.has(s.id))return;
+  state.homePreset='auto';
   state.phaseById[s.id]=p;
   if(p==='normal'||p==='resolved')state.notices.filter(n=>n.sceneId===s.id).forEach(n=>n.handled=true);
   state.bannerNoticeId=null;clearTimeout(bannerTimer);
   recordNotice(noticeSpec(s.id,p));
-  navigate('home',{keepBanner:true});scrollHomeObject(state.objectTab,false);
+  navigate('home',{keepBanner:true});
 }
 function triggerShowcase(type){
+  state.homePreset='auto';
   if(type==='memory'){
     state.created.add(MEMORY_DIGEST.sceneId);state.phaseById[MEMORY_DIGEST.sceneId]='normal';
     state.sceneId=MEMORY_DIGEST.sceneId;state.objectTab=objectForScene(state.sceneId).id;
-    recordNotice(MEMORY_DIGEST);navigate('home',{keepBanner:true});scrollHomeObject(state.objectTab,false);return;
+    recordNotice(MEMORY_DIGEST);navigate('home',{keepBanner:true});return;
   }
   const item=NOTICE_SHOWCASES.find(x=>x.type===type);if(!item)return;
   state.sceneId=item.sceneId;state.objectTab=objectForScene(item.sceneId).id;
   state.created.add(item.sceneId);advancePhase('attention');
+}
+function applyHomePreset(preset){
+  const target={attention:['meal','attention'],risk:['parcel','attention'],unknown:['child','unknown'],discovery:['moments','attention']}[preset];
+  if(!['calm','attention','risk','unknown','discovery'].includes(preset))return;
+  SCENARIOS.forEach(s=>{if(state.created.has(s.id))state.phaseById[s.id]='normal';});
+  if(target){state.created.add(target[0]);state.phaseById[target[0]]=target[1];state.sceneId=target[0];state.objectTab=objectForScene(target[0]).id;}
+  state.homePreset=preset;state.bannerNoticeId=null;clearTimeout(bannerTimer);navigate('home');
 }
 function matchScene(text){const lower=text.toLowerCase();const ranked=SCENARIOS.map(s=>({s,score:s.keywords.reduce((n,k)=>n+(lower.includes(k.toLowerCase())?k.length:0),0)})).sort((a,b)=>b.score-a.score);return ranked[0]?.score?ranked[0].s:null;}
 async function shareMemory(){
@@ -360,9 +386,10 @@ document.addEventListener('click',event=>{
   if(event.target.classList.contains('modal-backdrop')){state.modal='';render();return;}
   const showcase=event.target.closest('[data-console-showcase]');if(showcase){triggerShowcase(showcase.dataset.consoleShowcase);return;}
   const phaseControl=event.target.closest('[data-console-phase]');if(phaseControl){advancePhase(phaseControl.dataset.consolePhase);return;}
+  const homePreset=event.target.closest('[data-home-preset]');if(homePreset){applyHomePreset(homePreset.dataset.homePreset);return;}
   const banner=event.target.closest('[data-banner-open]');if(banner){const n=state.notices.find(x=>x.id===banner.dataset.bannerOpen);if(n){state.noticeReturnPage=state.page;state.activeNoticeId=n.id;state.sceneId=n.sceneId;state.bannerNoticeId=null;clearTimeout(bannerTimer);navigate('notice-detail');}return;}
   const deviceSelect=event.target.closest('[data-device-select]');if(deviceSelect){if(DEVICE_MAP[deviceSelect.dataset.deviceSelect]){state.deviceId=deviceSelect.dataset.deviceSelect;render({scroll:'top'});}return;}
-  const objectTab=event.target.closest('[data-object-tab]');if(objectTab){const object=OBJECTS.find(x=>x.id===objectTab.dataset.objectTab);if(object){state.objectTab=object.id;state.sceneId=object.scenes.find(id=>state.created.has(id))||object.scenes[0];document.querySelectorAll('.object-tab').forEach(tab=>{const selected=tab.dataset.objectTab===object.id;tab.classList.toggle('active',selected);tab.setAttribute('aria-pressed',String(selected));});scrollHomeObject(object.id);}return;}
+  const objectTab=event.target.closest('[data-object-tab]');if(objectTab){const object=OBJECTS.find(x=>x.id===objectTab.dataset.objectTab);if(object){state.objectTab=object.id;state.sceneId=object.scenes.find(id=>state.created.has(id))||object.scenes[0];document.querySelectorAll('.object-tab').forEach(tab=>{const selected=tab.dataset.objectTab===object.id;tab.classList.toggle('active',selected);tab.setAttribute('aria-pressed',String(selected));});scrollFocusObject(object.id);}return;}
   const item=event.target.closest('[data-open-scene]');if(item){state.sceneId=item.dataset.openScene;state.returnPage=state.page;navigate('detail');return;}
   const chatDetail=event.target.closest('[data-chat-detail]');if(chatDetail){state.sceneId=chatDetail.dataset.chatDetail;state.returnPage='agent';navigate('detail');return;}
   const chatSuggest=event.target.closest('[data-chat-suggest]');if(chatSuggest){askChat(chatSuggest.dataset.chatSuggest);return;}
@@ -382,7 +409,7 @@ document.addEventListener('click',event=>{
     case 'agent-mark-area':if(state.agentAwaiting&&state.agentCustomArea&&state.agentAreaMarked)startBusy(4);break;
     case 'agent-confirm':if(state.agentStep===7&&!state.agentBusy){const id=state.sceneId;if(!state.created.has(id)){state.created.add(id);state.phaseById[id]='armed';}state.focusZones[id]={label:agentAreaLabel(scene(),AGENT_PLANS[id]),x:state.zoneX,y:state.zoneY};state.agentStep=8;render({scroll:'bottom'});}break;
     case 'console-create':state.created.delete(state.sceneId);delete state.phaseById[state.sceneId];delete state.focusZones[state.sceneId];state.notices=state.notices.filter(n=>n.sceneId!==state.sceneId);startAgent(state.sceneId);break;
-    case 'console-seed':state.created.add(state.sceneId);state.phaseById[state.sceneId]='armed';navigate('home');scrollHomeObject(state.objectTab,false);break;
+    case 'console-seed':state.created.add(state.sceneId);state.phaseById[state.sceneId]='armed';state.homePreset='auto';navigate('attention');scrollFocusObject(state.objectTab,false);break;
     case 'console-home':navigate('home');break;
     case 'console-reset':state.created.delete(state.sceneId);delete state.phaseById[state.sceneId];delete state.focusZones[state.sceneId];state.notices=state.notices.filter(n=>n.sceneId!==state.sceneId);navigate('home');break;
     case 'create-current':startAgent(state.sceneId);break;
